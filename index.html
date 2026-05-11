@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>360 Looper Pedal v0.001</title>
+    <style>
+        body {
+            background-color: #f0f0f0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            color: #24292e;
+        }
+
+        #pedal-container {
+            width: 320px;
+            background-color: #d1d5da;
+            border: 2px solid #24292e;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 0 #959da5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header {
+            font-size: 14px;
+            letter-spacing: 2px;
+            color: #586069;
+            text-transform: uppercase;
+        }
+
+        .tempo-section {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .pedal-btn {
+            flex: 1;
+            padding: 15px;
+            border: 1px solid #24292e;
+            background: #ffffff;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.1s;
+            text-align: center;
+        }
+
+        .pedal-btn:active {
+            transform: translateY(2px);
+            background: #f6f8fa;
+        }
+
+        .pulse-light {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #959da5;
+            margin-bottom: 5px;
+            display: inline-block;
+        }
+
+        .slider-group {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        label {
+            font-size: 12px;
+            color: #24292e;
+        }
+
+        input[type=range] {
+            width: 100%;
+            accent-color: #0366d6;
+        }
+
+        #main-looper-btn {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 4px solid #24292e;
+            background: #fafbfc;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        #main-looper-btn.armed { border-color: #f66a0a; }
+        #main-looper-btn.recording { border-color: #d73a49; }
+        #main-looper-btn.playing { border-color: #28a745; }
+
+        .hidden { display: none; }
+        
+        #reset-btn {
+            margin-top: 10px;
+            color: #d73a49;
+            font-size: 12px;
+            border: none;
+            background: none;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+<div id="pedal-container">
+    <div class="header">360 Looper v0.001</div>
+
+    <div class="tempo-section">
+        <div id="tap-btn" class="pedal-btn">
+            <div id="beat-light" class="pulse-light"></div><br>
+            TAP
+        </div>
+        <div id="bpm-display-btn" class="pedal-btn">
+            BPM<br><span id="bpm-value">0</span>
+        </div>
+    </div>
+
+    <div id="tempo-slider-container" class="slider-group hidden">
+        <label>Fine Tune BPM</label>
+        <input type="range" id="bpm-slider" min="20" max="200" value="120">
+    </div>
+
+    <div class="slider-group">
+        <label>Click Vol</label>
+        <input type="range" id="click-vol" min="0" max="1" step="0.1" value="0.5">
+    </div>
+
+    <div class="slider-group">
+        <label>Loop Vol</label>
+        <input type="range" id="loop-vol" min="0" max="1" step="0.1" value="0.8">
+    </div>
+
+    <div id="main-looper-btn">
+        <div id="looper-status">READY</div>
+    </div>
+
+    <button id="reset-btn">RESET ALL</button>
+</div>
+
+<script>
+    let audioCtx;
+    let clickOsc;
+    let bpm = 0;
+    let tapTimes = [];
+    let isPlaying = false;
+    let currentBeat = 0;
+    let nextBeatTime = 0;
+    
+    let looperState = 'IDLE'; // IDLE, ARMED, RECORDING, PLAYING
+    let mediaRecorder;
+    let audioChunks = [];
+    let loopBuffer;
+    let loopSource;
+
+    const looperBtn = document.getElementById('main-looper-btn');
+    const looperStatus = document.getElementById('looper-status');
+    const beatLight = document.getElementById('beat-light');
+    const bpmValue = document.getElementById('bpm-value');
+    const bpmSlider = document.getElementById('bpm-slider');
+    const bpmDisplayBtn = document.getElementById('bpm-display-btn');
+    const clickVol = document.getElementById('click-vol');
+    const loopVol = document.getElementById('loop-vol');
+
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    }
+
+    // Tap Tempo Logic
+    document.getElementById('tap-btn').addEventListener('click', () => {
+        initAudio();
+        const now = performance.now();
+        tapTimes.push(now);
+        if (tapTimes.length > 4) tapTimes.shift();
+
+        if (tapTimes.length >= 2) {
+            const intervals = [];
+            for (let i = 1; i < tapTimes.length; i++) {
+                intervals.push(tapTimes[i] - tapTimes[i-1]);
+            }
+            const avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
+            bpm = Math.round(60000 / avgInterval);
+            updateBPM(bpm);
+        }
+
+        if (!isPlaying && tapTimes.length >= 4) {
+            startMetronome();
+        }
+    });
+
+    function updateBPM(newBpm) {
+        bpm = Math.min(Math.max(newBpm, 20), 200);
+        bpmValue.innerText = bpm;
+        bpmSlider.value = bpm;
+    }
+
+    bpmDisplayBtn.addEventListener('click', () => {
+        document.getElementById('tempo-slider-container').classList.toggle('hidden');
+    });
+
+    bpmSlider.addEventListener('input', (e) => {
+        updateBPM(e.target.value);
+    });
+
+    function startMetronome() {
+        isPlaying = true;
+        nextBeatTime = audioCtx.currentTime;
+        scheduler();
+    }
+
+    function scheduler() {
+        while (nextBeatTime < audioCtx.currentTime + 0.1) {
+            scheduleBeat(currentBeat, nextBeatTime);
+            advanceBeat();
+        }
+        if (isPlaying) setTimeout(scheduler, 25);
+    }
+
+    function advanceBeat() {
+        const secondsPerBeat = 60.0 / bpm;
+        nextBeatTime += secondsPerBeat;
+        currentBeat = (currentBeat + 1) % 4;
+    }
+
+    function scheduleBeat(beat, time) {
+        // Visuals
+        const duration = (60.0 / bpm) * 1000;
+        setTimeout(() => {
+            beatLight.style.background = (beat === 0) ? '#0366d6' : '#24292e';
+            setTimeout(() => beatLight.style.background = '#959da5', 100);
+            
+            handleStateLogic(beat);
+        }, (time - audioCtx.currentTime) * 1000);
+
+        // Sound
+        if (clickVol.value > 0) {
+            const osc = audioCtx.createOscillator();
+            const envelope = audioCtx.createGain();
+            osc.frequency.value = (beat === 0) ? 880 : 440;
+            envelope.gain.value = clickVol.value;
+            envelope.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+            osc.connect(envelope);
+            envelope.connect(audioCtx.destination);
+            osc.start(time);
+            osc.stop(time + 0.1);
+        }
+    }
+
+    function handleStateLogic(beat) {
+        if (beat === 0) {
+            if (looperState === 'ARMED') {
+                startRecording();
+            } else if (looperState === 'RECORDING') {
+                stopRecording();
+            } else if (looperState === 'PLAYING') {
+                playLoop();
+            }
+        }
+    }
+
+    looperBtn.addEventListener('click', () => {
+        initAudio();
+        if (looperState === 'IDLE') {
+            looperState = 'ARMED';
+            looperStatus.innerText = 'ARMED...';
+            looperBtn.className = 'armed';
+        } else if (looperState === 'PLAYING' || looperState === 'RECORDING') {
+            stopLoopPlayback();
+            looperState = 'IDLE';
+            looperStatus.innerText = 'READY';
+            looperBtn.className = '';
+        }
+    });
+
+    async function startRecording() {
+        looperState = 'RECORDING';
+        looperStatus.innerText = 'REC';
+        looperBtn.className = 'recording';
+        audioChunks = [];
+
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+            } 
+        });
+        
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.start();
+    }
+
+    function stopRecording() {
+        mediaRecorder.stop();
+        mediaRecorder.onstop = async () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            const arrayBuffer = await audioBlob.arrayBuffer();
+            loopBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            looperState = 'PLAYING';
+            looperStatus.innerText = 'PLAY';
+            looperBtn.className = 'playing';
+            playLoop();
+        };
+    }
+
+    function playLoop() {
+        if (!loopBuffer || looperState !== 'PLAYING') return;
+        if (loopSource) loopSource.stop();
+        
+        loopSource = audioCtx.createBufferSource();
+        loopSource.buffer = loopBuffer;
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.value = loopVol.value;
+        loopSource.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        loopSource.start(0);
+    }
+
+    function stopLoopPlayback() {
+        if (loopSource) loopSource.stop();
+        if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+    }
+
+    document.getElementById('reset-btn').addEventListener('click', () => {
+        location.reload();
+    });
+</script>
+
+</body>
+</html>
