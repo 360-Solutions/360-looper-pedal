@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>360 Looper Pedal v0.002</title>
+    <title>360 Looper Pedal</title>
     <style>
         body {
             background-color: #24292e;
@@ -71,6 +71,10 @@
             transform: translateY(2px);
         }
 
+        #reset-btn {
+            color: #d73a49;
+        }
+
         .slider-box {
             width: 100%;
             background: #fafbfc;
@@ -90,7 +94,7 @@
             font-weight: bold;
         }
 
-        #bpm-slider {
+        input[type=range] {
             width: 100%;
             margin: 10px 0;
         }
@@ -99,7 +103,7 @@
             width: 140px;
             height: 140px;
             border-radius: 50%;
-            border: 8px solid #959da5; /* Default gray */
+            border: 8px solid #6a737d; 
             background: #f6f8fa;
             display: flex;
             flex-direction: column;
@@ -136,11 +140,10 @@
             border: 1px solid #000;
         }
 
-        /* State Classes */
         .outline-orange { border-color: #f66a0a !important; }
         .outline-red { border-color: #d73a49 !important; }
         .outline-green { border-color: #28a745 !important; }
-        .outline-empty { border-color: #959da5 !important; }
+        .outline-empty { border-color: #6a737d !important; }
 
         #init-overlay {
             position: absolute;
@@ -169,17 +172,17 @@
 
 <div id="pedal-case">
     <div id="init-overlay">
-        <button class="power-btn" onclick="startPedal()">START / RESET</button>
+        <button class="power-btn" onclick="startPedal()">START / ALLOW MIC</button>
     </div>
 
     <div class="brand-label">360 Looper Pedal</div>
-    <div class="version-label">Vibe coded by Jeremiah Keller v0.002</div>
+    <div class="version-label">Vibe coded by Jeremiah Keller v0.003</div>
 
     <div class="led-light" id="beat-led"></div>
 
     <div class="control-row">
         <div id="tap-btn" class="small-pedal-btn">TAP TEMPO</div>
-        <div id="stop-btn" class="small-pedal-btn">STOP LOOP</div>
+        <div id="reset-btn" class="small-pedal-btn" onclick="location.reload()">RESET ALL</div>
     </div>
 
     <div class="slider-box">
@@ -189,7 +192,7 @@
 
     <div id="main-switch" class="outline-empty">
         <div id="status-text">RECORD</div>
-        <div id="sub-status">NO LOOP</div>
+        <div id="sub-status">READY</div>
     </div>
 
     <div class="control-row">
@@ -212,8 +215,9 @@
     let currentBeat = 0;
     let tapTimes = [];
     
-    let looperState = 'EMPTY'; // EMPTY, ARMING, COUNTING, RECORDING, PLAYING, STOPPED
+    let looperState = 'EMPTY'; 
     let countdownBeats = 0;
+    let recordedOnce = false;
     
     let mediaRecorder;
     let audioChunks = [];
@@ -226,6 +230,7 @@
     const beatLed = document.getElementById('beat-led');
     const bpmSlider = document.getElementById('bpm-slider');
     const bpmVal = document.getElementById('bpm-val');
+    const clickVolSlider = document.getElementById('click-vol');
 
     async function startPedal() {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -233,26 +238,24 @@
         
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
+                audio: { 
+                    echoCancellation: { exact: false }, 
+                    noiseSuppression: { exact: false }, 
+                    autoGainControl: { exact: false } 
+                } 
             });
-            stream.getTracks().forEach(track => track.stop()); // Just to trigger permission
+            stream.getTracks().forEach(track => track.stop());
             document.getElementById('init-overlay').style.display = 'none';
-            resetAll();
+            
+            if (!isClicking) startMetronome();
         } catch (err) {
             alert("Microphone access is required for the looper to work.");
         }
     }
 
-    function resetAll() {
-        if (loopSource) loopSource.stop();
-        looperState = 'EMPTY';
-        updateUI();
-        if (!isClicking) startMetronome();
-    }
-
     function startMetronome() {
         isClicking = true;
-        nextBeatTime = audioCtx.currentTime;
+        nextBeatTime = audioCtx.currentTime + 0.1;
         scheduler();
     }
 
@@ -271,8 +274,7 @@
     }
 
     function scheduleBeat(beat, time) {
-        // Sound
-        const vol = document.getElementById('click-vol').value;
+        const vol = clickVolSlider.value;
         if (vol > 0) {
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
@@ -285,7 +287,6 @@
             osc.stop(time + 0.1);
         }
 
-        // Visuals and Logic
         setTimeout(() => {
             beatLed.style.background = (beat === 0) ? '#d73a49' : '#0366d6';
             setTimeout(() => beatLed.style.background = '#444', 100);
@@ -302,6 +303,7 @@
             } else if (looperState === 'COUNTING') {
                 countdownBeats -= 4;
                 if (countdownBeats <= 0) {
+                    clickVolSlider.value = 0; 
                     startRecording();
                 }
             } else if (looperState === 'RECORDING') {
@@ -317,18 +319,15 @@
     }
 
     mainBtn.addEventListener('click', () => {
-        if (looperState === 'EMPTY' || looperState === 'STOPPED') {
+        if (looperState === 'EMPTY' && !recordedOnce) {
             looperState = 'ARMING';
             updateUI();
         } else if (looperState === 'PLAYING') {
-            // Already playing, hitting it again does nothing or we could toggle
-        }
-    });
-
-    document.getElementById('stop-btn').addEventListener('click', () => {
-        if (loopSource) loopSource.stop();
-        if (looperState === 'PLAYING') {
+            if (loopSource) loopSource.stop();
             looperState = 'STOPPED';
+            updateUI();
+        } else if (looperState === 'STOPPED') {
+            looperState = 'PLAYING';
             updateUI();
         }
     });
@@ -362,11 +361,12 @@
             case 'EMPTY':
                 mainBtn.classList.add('outline-empty');
                 statusText.innerText = "RECORD";
-                subStatus.innerText = "NO LOOP";
+                subStatus.innerText = "READY";
                 break;
             case 'ARMING':
                 mainBtn.classList.add('outline-orange');
-                statusText.innerText = "WAITING...";
+                statusText.innerText = "WAITING";
+                subStatus.innerText = "FOR BEAT 1";
                 break;
             case 'COUNTING':
                 mainBtn.classList.add('outline-orange');
@@ -375,24 +375,33 @@
             case 'RECORDING':
                 mainBtn.classList.add('outline-red');
                 statusText.innerText = "RECORDING";
+                subStatus.innerText = "PLAY NOW";
                 break;
             case 'PLAYING':
                 mainBtn.classList.add('outline-green');
                 statusText.innerText = "PLAYING";
+                subStatus.innerText = "TAP TO PAUSE";
                 break;
             case 'STOPPED':
-                mainBtn.classList.add('outline-red');
-                statusText.innerText = "PLAY";
-                subStatus.innerText = "LOOP SAVED";
+                mainBtn.classList.add('outline-red'); 
+                statusText.innerText = "PAUSED";
+                subStatus.innerText = "TAP TO PLAY";
                 break;
         }
     }
 
     async function startRecording() {
         looperState = 'RECORDING';
+        recordedOnce = true;
         updateUI();
         audioChunks = [];
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: { 
+                echoCancellation: { exact: false }, 
+                noiseSuppression: { exact: false }, 
+                autoGainControl: { exact: false } 
+            } 
+        });
         mediaRecorder = new MediaRecorder(stream);
         mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
         mediaRecorder.start();
