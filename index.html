@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>360 Looper Pedal v0.009</title>
+    <title>360 Looper Pedal v0.010</title>
     <style>
         body {
             background-color: #24292e;
@@ -122,10 +122,26 @@
             box-shadow: 0 2px 0 #959da5;
         }
 
-        #power-btn { width: 100%; }
+        #power-btn { width: 100%; font-weight: bold; }
         .mic-off { background: #ffd33d !important; }
         .mic-on { background: #28a745 !important; color: white !important; }
-        .rec-active { background: #d73a49 !important; color: white !important; }
+        
+        #rec-btn {
+            border: 2px solid #d73a49;
+            color: #d73a49;
+            font-weight: bold;
+            box-shadow: 0 4px 0 #a02a36;
+        }
+        
+        #rec-btn:active {
+            box-shadow: 0 2px 0 #a02a36;
+        }
+
+        .rec-active { 
+            background: #d73a49 !important; 
+            color: white !important; 
+            box-shadow: 0 4px 0 #a02a36 !important;
+        }
 
         .slider-group {
             width: 100%;
@@ -188,7 +204,7 @@
 <body>
 
 <div id="pedal-case">
-    <div class="brand-label">360 LOOPER v0.009</div>
+    <div class="brand-label">360 LOOPER v0.010</div>
     
     <button id="power-btn" class="pedal-btn mic-off">1. INITIALIZE MIC</button>
     
@@ -206,9 +222,9 @@
     </div>
 
     <div class="grid-controls">
-        <button id="stop-btn" class="pedal-btn" style="color: #d73a49;">STOP</button>
-        <button id="play-intro-btn" class="pedal-btn" style="background: #e1e4e8;">PLAY INTRO</button>
-        <button id="play-loop-btn" class="pedal-btn" style="background: #c8e1ff;">PLAY LOOP</button>
+        <button id="stop-btn" class="pedal-btn" style="color: #d73a49; font-weight: bold;">STOP</button>
+        <button id="play-intro-btn" class="pedal-btn" style="background: #e1e4e8; font-weight: bold;">PLAY INTRO</button>
+        <button id="play-loop-btn" class="pedal-btn" style="background: #c8e1ff; font-weight: bold;">PLAY LOOP</button>
     </div>
 
     <div class="slider-group">
@@ -230,7 +246,7 @@
         </div>
     </div>
 
-    <button id="reset-btn" class="pedal-btn" style="width:100%; color:#d73a49;">RESET ALL</button>
+    <button id="reset-btn" class="pedal-btn" style="width:100%; color:#d73a49; font-weight: bold;">RESET ALL</button>
 </div>
 
 <script>
@@ -265,8 +281,6 @@
             highPassNode.Q.value = 5; 
             
             gainNode = audioCtx.createGain();
-            
-            sourceNode = audioCtx.createBufferSource();
             
             highPassNode.connect(lowPassNode);
             lowPassNode.connect(gainNode);
@@ -315,7 +329,7 @@
                 const source = audioCtx.createMediaStreamSource(micStream);
                 source.connect(analyser);
             } catch (e) {
-                alert("Mic access denied.");
+                alert("Mic access denied. Please check Safari settings.");
             }
         } else {
             releaseMicHard();
@@ -333,10 +347,18 @@
         cancelAnimationFrame(animationId);
         
         if (audioCtx) {
+            let osc = audioCtx.createOscillator();
+            let silentGain = audioCtx.createGain();
+            silentGain.gain.value = 0;
+            osc.connect(silentGain);
+            silentGain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+
             await audioCtx.suspend();
             setTimeout(async () => {
                 await audioCtx.resume();
-            }, 50);
+            }, 100);
         }
     }
 
@@ -395,7 +417,7 @@
 
     recBtn.addEventListener('click', () => {
         if (!isMicActive) {
-            alert("Please initialize the mic first.");
+            alert("Please tap INITIALIZE MIC first.");
             return;
         }
         if (!isRecording) startRec();
@@ -493,8 +515,9 @@
     function stopPlayback() {
         isPlaying = false;
         if (sourceNode) {
-            sourceNode.stop();
-            sourceNode.disconnect();
+            try { sourceNode.stop(); } catch(e) {}
+            try { sourceNode.disconnect(); } catch(e) {}
+            sourceNode = null;
         }
         cancelAnimationFrame(playheadAnimId);
         playhead.style.display = 'none';
