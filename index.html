@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>360 Looper Pedal v0.007</title>
+    <title>360 Looper Pedal v0.008</title>
     <style>
         body {
             background-color: #24292e;
@@ -19,6 +19,8 @@
 
         #pedal-case {
             width: 350px;
+            max-height: 95vh;
+            overflow-y: auto;
             background-color: #d1d5da;
             border: 3px solid #444;
             border-radius: 30px;
@@ -27,7 +29,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 15px;
+            gap: 12px;
             position: relative;
         }
 
@@ -41,12 +43,13 @@
 
         #display-screen {
             width: 100%;
-            height: 160px;
+            height: 140px;
             background: #1b1f23;
             border: 2px solid #444;
             border-radius: 10px;
             position: relative;
             touch-action: none;
+            overflow: hidden;
         }
 
         canvas {
@@ -59,8 +62,8 @@
             position: absolute;
             top: 0;
             bottom: 0;
-            width: 20px; /* Wider invisible hit area for fingers */
-            margin-left: -10px;
+            width: 24px;
+            margin-left: -12px;
             z-index: 10;
         }
 
@@ -77,23 +80,43 @@
         #start-marker .marker-line { background: #0366d6; box-shadow: 0 0 5px #0366d6; }
         #end-marker .marker-line { background: #d73a49; box-shadow: 0 0 5px #d73a49; }
 
+        #playhead {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #ffd33d;
+            box-shadow: 0 0 8px #ffd33d;
+            z-index: 5;
+            left: 0%;
+            display: none;
+            pointer-events: none;
+        }
+
         .controls {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .grid-controls {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
             width: 100%;
         }
 
         .pedal-btn {
-            padding: 12px;
+            padding: 12px 8px;
             border: 2px solid #24292e;
             background: #ffffff;
-            border-radius: 10px;
-            font-size: 12px;
+            border-radius: 8px;
+            font-size: 11px;
             font-weight: bold;
             color: #24292e;
             cursor: pointer;
             box-shadow: 0 4px 0 #959da5;
+            text-align: center;
         }
 
         .pedal-btn:active {
@@ -101,42 +124,87 @@
             box-shadow: 0 2px 0 #959da5;
         }
 
-        #power-btn {
-            background: #ffd33d;
+        #power-btn { width: 100%; }
+        .mic-off { background: #ffd33d !important; }
+        .mic-on { background: #28a745 !important; color: white !important; }
+        .rec-active { background: #d73a49 !important; color: white !important; }
+
+        .slider-group {
             width: 100%;
+            display: flex;
+            flex-direction: column;
+            background: #fafbfc;
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #959da5;
+            box-sizing: border-box;
         }
 
-        .rec-active { background: #d73a49 !important; color: white !important; }
-        .play-active { background: #28a745 !important; color: white !important; }
+        .slider-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        label {
+            font-size: 10px;
+            color: #586069;
+            text-transform: uppercase;
+            width: 60px;
+        }
+
+        input[type=range] {
+            flex: 1;
+        }
 
         #timer {
             font-family: monospace;
-            font-size: 18px;
+            font-size: 16px;
             color: #24292e;
         }
-
-        .hidden { display: none; }
     </style>
 </head>
 <body>
 
 <div id="pedal-case">
-    <div class="brand-label">360 LOOPER v0.007</div>
+    <div class="brand-label">360 LOOPER v0.008</div>
     
-    <button id="power-btn" class="pedal-btn">1. INITIALIZE MICROPHONE</button>
+    <button id="power-btn" class="pedal-btn mic-off">1. INITIALIZE MIC</button>
     
-    <div id="timer">00:00</div>
+    <div class="controls">
+        <button id="rec-btn" class="pedal-btn" style="flex:1;">RECORD</button>
+        <div id="timer" style="padding: 10px;">00:00</div>
+    </div>
 
     <div id="display-screen">
         <canvas id="waveform-canvas"></canvas>
+        <div id="playhead"></div>
         <div id="intro-marker" class="marker" style="left: 5%;"><div class="marker-line"></div></div>
         <div id="start-marker" class="marker" style="left: 30%;"><div class="marker-line"></div></div>
         <div id="end-marker" class="marker" style="left: 80%;"><div class="marker-line"></div></div>
     </div>
 
-    <div class="controls">
-        <button id="rec-btn" class="pedal-btn">RECORD</button>
-        <button id="play-btn" class="pedal-btn">PLAY</button>
+    <div class="grid-controls">
+        <button id="stop-btn" class="pedal-btn" style="color: #d73a49;">STOP</button>
+        <button id="play-intro-btn" class="pedal-btn" style="background: #e1e4e8;">PLAY INTRO</button>
+        <button id="play-loop-btn" class="pedal-btn" style="background: #c8e1ff;">PLAY LOOP</button>
+    </div>
+
+    <div class="slider-group">
+        <div class="slider-row">
+            <label>VOL</label>
+            <input type="range" id="vol-slider" min="0" max="2" step="0.1" value="1.0">
+        </div>
+        <div class="slider-row">
+            <label>LOW PASS</label>
+            <input type="range" id="lp-slider" min="100" max="20000" step="100" value="20000">
+        </div>
+        <div class="slider-row">
+            <label>HIGH PASS</label>
+            <input type="range" id="hp-slider" min="20" max="5000" step="50" value="20">
+        </div>
     </div>
 
     <button id="reset-btn" class="pedal-btn" style="width:100%; color:#d73a49; font-size:10px;">RESET ALL</button>
@@ -144,20 +212,40 @@
 
 <script>
     let audioCtx, micStream, recorder, audioChunks = [], audioBuffer, sourceNode, analyser;
-    let isRecording = false, isPlaying = false, startTime, timerInterval, animationId;
+    let isRecording = false, isPlaying = false, isMicActive = false;
+    let startTime, timerInterval, animationId, playheadAnimId;
+    let playbackStartTime = 0, bufferOffset = 0;
     
+    let lowPassNode, highPassNode, gainNode;
+
     const canvas = document.getElementById('waveform-canvas');
     const ctx = canvas.getContext('2d');
+    const playhead = document.getElementById('playhead');
     const powerBtn = document.getElementById('power-btn');
     const recBtn = document.getElementById('rec-btn');
-    const playBtn = document.getElementById('play-btn');
     const timerDisplay = document.getElementById('timer');
 
-    let markers = {
-        intro: 0.05,
-        start: 0.30,
-        end: 0.80
-    };
+    let markers = { intro: 0.05, start: 0.30, end: 0.80 };
+
+    function initAudioContext() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            lowPassNode = audioCtx.createBiquadFilter();
+            lowPassNode.type = 'lowpass';
+            
+            highPassNode = audioCtx.createBiquadFilter();
+            highPassNode.type = 'highpass';
+            
+            gainNode = audioCtx.createGain();
+            
+            highPassNode.connect(lowPassNode);
+            lowPassNode.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            updateFilters();
+        }
+    }
 
     function resize() {
         canvas.width = canvas.offsetWidth * window.devicePixelRatio;
@@ -166,22 +254,39 @@
     window.addEventListener('resize', resize);
     resize();
 
-    // Initialize Mic Early
+    document.getElementById('vol-slider').addEventListener('input', updateFilters);
+    document.getElementById('lp-slider').addEventListener('input', updateFilters);
+    document.getElementById('hp-slider').addEventListener('input', updateFilters);
+
+    function updateFilters() {
+        if (!audioCtx) return;
+        gainNode.gain.value = document.getElementById('vol-slider').value;
+        lowPassNode.frequency.value = document.getElementById('lp-slider').value;
+        highPassNode.frequency.value = document.getElementById('hp-slider').value;
+    }
+
     powerBtn.addEventListener('click', async () => {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        try {
-            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            powerBtn.innerText = "MIC READY";
-            powerBtn.style.background = "#28a745";
-            powerBtn.style.color = "white";
-            
-            // Setup Visualizer
-            analyser = audioCtx.createAnalyser();
-            const source = audioCtx.createMediaStreamSource(micStream);
-            source.connect(analyser);
-            drawLive();
-        } catch (e) {
-            alert("Mic access denied.");
+        initAudioContext();
+        if (!isMicActive) {
+            try {
+                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                isMicActive = true;
+                powerBtn.innerText = "MIC ON - TAP TO RELEASE";
+                powerBtn.className = "pedal-btn mic-on";
+                
+                analyser = audioCtx.createAnalyser();
+                const source = audioCtx.createMediaStreamSource(micStream);
+                source.connect(analyser);
+                drawLive();
+            } catch (e) {
+                alert("Mic access denied.");
+            }
+        } else {
+            micStream.getTracks().forEach(t => t.stop());
+            isMicActive = false;
+            powerBtn.innerText = "MIC RELEASED - TAP TO RE-ARM";
+            powerBtn.className = "pedal-btn mic-off";
+            cancelAnimationFrame(animationId);
         }
     });
 
@@ -209,7 +314,6 @@
         animationId = requestAnimationFrame(drawLive);
     }
 
-    // Draggable Logic
     function handleDrag(id, key) {
         const el = document.getElementById(id);
         let active = false;
@@ -229,13 +333,22 @@
     handleDrag('end-marker', 'end');
 
     recBtn.addEventListener('click', () => {
+        if (!isMicActive) {
+            alert("Please initialize the mic first.");
+            return;
+        }
         if (!isRecording) startRec();
         else stopRec();
     });
 
     function startRec() {
+        stopPlayback();
+        audioBuffer = null;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        playhead.style.display = 'none';
+        
         isRecording = true;
-        recBtn.innerText = "STOP";
+        recBtn.innerText = "STOP REC";
         recBtn.classList.add('rec-active');
         audioChunks = [];
         startTime = Date.now();
@@ -255,7 +368,7 @@
     function stopRec() {
         isRecording = false;
         clearInterval(timerInterval);
-        recBtn.innerText = "RECORD";
+        recBtn.innerText = "REC OVERWRITE";
         recBtn.classList.remove('rec-active');
         recorder.stop();
         recorder.onstop = async () => {
@@ -284,34 +397,64 @@
         }
     }
 
-    playBtn.addEventListener('click', () => {
+    function startPlayback(startKey) {
         if (!audioBuffer) return;
-        if (isPlaying) {
-            isPlaying = false;
-            playBtn.innerText = "PLAY";
-            playBtn.classList.remove('play-active');
-            if (sourceNode) sourceNode.stop();
-        } else {
-            isPlaying = true;
-            playBtn.innerText = "STOP";
-            playBtn.classList.add('play-active');
+        stopPlayback();
+        
+        isPlaying = true;
+        playhead.style.display = 'block';
+        
+        sourceNode = audioCtx.createBufferSource();
+        sourceNode.buffer = audioBuffer;
+        
+        bufferOffset = audioBuffer.duration * markers[startKey];
+        const loopStart = audioBuffer.duration * markers.start;
+        const loopEnd = audioBuffer.duration * markers.end;
 
-            sourceNode = audioCtx.createBufferSource();
-            sourceNode.buffer = audioBuffer;
-            
-            const introStart = audioBuffer.duration * markers.intro;
-            const loopStart = audioBuffer.duration * markers.start;
-            const loopEnd = audioBuffer.duration * markers.end;
+        sourceNode.loop = true;
+        sourceNode.loopStart = loopStart;
+        sourceNode.loopEnd = loopEnd;
 
-            sourceNode.loop = true;
-            sourceNode.loopStart = loopStart;
-            sourceNode.loopEnd = loopEnd;
+        sourceNode.connect(highPassNode);
+        
+        playbackStartTime = audioCtx.currentTime;
+        sourceNode.start(0, bufferOffset);
+        
+        updatePlayhead();
+    }
 
-            sourceNode.connect(audioCtx.destination);
-            sourceNode.start(0, introStart);
+    function stopPlayback() {
+        isPlaying = false;
+        if (sourceNode) {
+            sourceNode.stop();
+            sourceNode.disconnect();
         }
-    });
+        cancelAnimationFrame(playheadAnimId);
+        playhead.style.display = 'none';
+    }
 
+    function updatePlayhead() {
+        if (!isPlaying || !audioBuffer) return;
+        
+        let playedTime = audioCtx.currentTime - playbackStartTime;
+        let currentPos = bufferOffset + playedTime;
+        
+        let loopStartSec = markers.start * audioBuffer.duration;
+        let loopEndSec = markers.end * audioBuffer.duration;
+        
+        if (currentPos > loopEndSec) {
+            currentPos = loopStartSec + ((currentPos - loopEndSec) % (loopEndSec - loopStartSec));
+        }
+        
+        let pct = currentPos / audioBuffer.duration;
+        playhead.style.left = (pct * 100) + '%';
+        
+        playheadAnimId = requestAnimationFrame(updatePlayhead);
+    }
+
+    document.getElementById('play-intro-btn').addEventListener('click', () => startPlayback('intro'));
+    document.getElementById('play-loop-btn').addEventListener('click', () => startPlayback('start'));
+    document.getElementById('stop-btn').addEventListener('click', stopPlayback);
     document.getElementById('reset-btn').addEventListener('click', () => location.reload());
 </script>
 
