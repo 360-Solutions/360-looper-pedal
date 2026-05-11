@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>360 Looper Pedal</title>
+    <title>360 Looper Pedal v0.006</title>
     <style>
         body {
             background-color: #24292e;
@@ -17,17 +17,16 @@
         }
 
         #pedal-case {
-            width: 320px;
+            width: 340px;
             background-color: #d1d5da;
             border: 3px solid #444;
             border-radius: 30px;
-            padding: 25px;
+            padding: 20px;
             box-shadow: inset 0 0 15px rgba(0,0,0,0.2), 0 15px 0 #959da5;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 20px;
-            position: relative;
+            gap: 15px;
         }
 
         .brand-label {
@@ -36,419 +35,293 @@
             color: #24292e;
             text-transform: uppercase;
             letter-spacing: 3px;
-            margin-bottom: 5px;
         }
 
-        .version-label {
-            font-size: 10px;
-            color: #586069;
-            margin-top: -15px;
-            margin-bottom: 10px;
-        }
-
-        .control-row {
-            display: flex;
-            justify-content: space-between;
+        #waveform-container {
             width: 100%;
-            gap: 15px;
+            height: 150px;
+            background: #24292e;
+            border: 2px solid #444;
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+            touch-action: none;
         }
 
-        .small-pedal-btn {
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .marker {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            cursor: ew-resize;
+            z-index: 5;
+        }
+
+        #start-marker { background: #0366d6; left: 10%; }
+        #end-marker { background: #d73a49; right: 10%; }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .pedal-btn {
             flex: 1;
-            padding: 12px;
+            padding: 15px;
             border: 2px solid #24292e;
             background: #ffffff;
-            border-radius: 10px;
-            font-size: 12px;
+            border-radius: 12px;
+            font-size: 14px;
             font-weight: bold;
             color: #24292e;
             cursor: pointer;
             text-align: center;
+            box-shadow: 0 4px 0 #959da5;
         }
 
-        .small-pedal-btn:active {
-            background: #e1e4e8;
+        .pedal-btn:active {
             transform: translateY(2px);
+            box-shadow: 0 2px 0 #959da5;
         }
 
-        #reset-btn {
-            color: #d73a49;
+        .rec-active {
+            background: #d73a49 !important;
+            color: white !important;
         }
 
-        .slider-box {
+        .play-active {
+            background: #28a745 !important;
+            color: white !important;
+        }
+
+        .slider-group {
             width: 100%;
+            display: flex;
+            flex-direction: column;
             background: #fafbfc;
-            border: 2px solid #24292e;
-            border-radius: 10px;
             padding: 10px;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            border-radius: 10px;
+            border: 1px solid #959da5;
         }
 
-        .slider-label {
-            font-size: 12px;
-            color: #24292e;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-
-        input[type=range] {
-            width: 100%;
-            margin: 10px 0;
-        }
-
-        #main-switch {
-            width: 140px;
-            height: 140px;
-            border-radius: 50%;
-            border: 8px solid #6a737d; 
-            background: #f6f8fa;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 5px 0 #959da5;
-        }
-
-        #main-switch:active {
-            transform: translateY(4px);
-            box-shadow: 0 1px 0 #959da5;
-        }
-
-        #status-text {
-            font-size: 16px;
-            font-weight: bold;
-            color: #24292e;
-        }
-
-        #sub-status {
+        label {
             font-size: 10px;
             color: #586069;
-            margin-top: 5px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
         }
 
-        .led-light {
-            width: 15px;
-            height: 15px;
-            border-radius: 50%;
-            background: #444;
-            margin-bottom: 10px;
-            border: 1px solid #000;
-        }
-
-        .outline-orange { border-color: #f66a0a !important; }
-        .outline-red { border-color: #d73a49 !important; }
-        .outline-green { border-color: #28a745 !important; }
-        .outline-empty { border-color: #6a737d !important; }
-
-        #init-overlay {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(209, 213, 218, 0.95);
-            z-index: 10;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            border-radius: 30px;
-        }
-
-        .power-btn {
-            padding: 20px 40px;
-            background: #d73a49;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 18px;
-            font-weight: bold;
-            box-shadow: 0 4px 0 #8a1d23;
+        #timer {
+            font-family: monospace;
+            font-size: 20px;
+            color: #24292e;
+            background: #fff;
+            padding: 5px 15px;
+            border-radius: 5px;
+            border: 1px solid #959da5;
         }
     </style>
 </head>
 <body>
 
 <div id="pedal-case">
-    <div id="init-overlay">
-        <button class="power-btn" onclick="startPedal()">START / ALLOW MIC</button>
+    <div class="brand-label">360 LOOPER v0.006</div>
+    
+    <div id="timer">00:00</div>
+
+    <div id="waveform-container">
+        <canvas id="waveform-canvas"></canvas>
+        <div id="start-marker" class="marker"></div>
+        <div id="end-marker" class="marker"></div>
     </div>
 
-    <div class="brand-label">360 Looper Pedal</div>
-    <div class="version-label">Vibe coded by Jeremiah Keller v0.004</div>
-
-    <div class="led-light" id="beat-led"></div>
-
-    <div class="control-row">
-        <div id="tap-btn" class="small-pedal-btn">TAP TEMPO</div>
-        <div id="reset-btn" class="small-pedal-btn" onclick="location.reload()">RESET ALL</div>
+    <div class="controls">
+        <button id="rec-btn" class="pedal-btn">RECORD</button>
+        <button id="play-btn" class="pedal-btn">PLAY LOOP</button>
     </div>
 
-    <div class="slider-box">
-        <div class="slider-label">BPM: <span id="bpm-val">90</span></div>
-        <input type="range" id="bpm-slider" min="20" max="200" value="90">
+    <div class="slider-group">
+        <label>Loop Volume</label>
+        <input type="range" id="vol-slider" min="0" max="1" step="0.1" value="0.8">
     </div>
 
-    <div id="main-switch" class="outline-empty">
-        <div id="status-text">RECORD</div>
-        <div id="sub-status">READY</div>
-    </div>
-
-    <div class="control-row">
-        <div class="slider-box" style="flex:1">
-            <div class="slider-label">CLICK</div>
-            <input type="range" id="click-vol" min="0" max="1" step="0.1" value="0.5">
-        </div>
-        <div class="slider-box" style="flex:1">
-            <div class="slider-label">LOOP</div>
-            <input type="range" id="loop-vol" min="0" max="1" step="0.1" value="0.8">
-        </div>
-    </div>
+    <button id="reset-btn" class="pedal-btn" style="color: #d73a49; font-size: 10px; padding: 5px;">RESET ALL</button>
 </div>
 
 <script>
     let audioCtx;
-    let bpm = 90;
-    let isClicking = false;
-    let nextBeatTime = 0;
-    let currentBeat = 0;
-    let tapTimes = [];
-    
-    let looperState = 'EMPTY'; 
-    let countdownBeats = 0;
-    let recordedOnce = false;
-    
-    let mediaRecorder;
+    let micStream;
+    let recorder;
     let audioChunks = [];
-    let loopBuffer;
-    let loopSource;
-    let currentMicStream = null;
+    let audioBuffer;
+    let sourceNode;
+    let isRecording = false;
+    let isPlaying = false;
+    let startTime;
+    let timerInterval;
 
-    const mainBtn = document.getElementById('main-switch');
-    const statusText = document.getElementById('status-text');
-    const subStatus = document.getElementById('sub-status');
-    const beatLed = document.getElementById('beat-led');
-    const bpmSlider = document.getElementById('bpm-slider');
-    const bpmVal = document.getElementById('bpm-val');
-    const clickVolSlider = document.getElementById('click-vol');
+    const canvas = document.getElementById('waveform-canvas');
+    const ctx = canvas.getContext('2d');
+    const recBtn = document.getElementById('rec-btn');
+    const playBtn = document.getElementById('play-btn');
+    const startMarker = document.getElementById('start-marker');
+    const endMarker = document.getElementById('end-marker');
+    const timerDisplay = document.getElementById('timer');
 
-    async function startPedal() {
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') await audioCtx.resume();
-        
-        try {
-            // Request permission, then immediately turn off the mic to free up iOS audio
-            const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            tempStream.getTracks().forEach(track => track.stop());
+    let loopStartPct = 0.1;
+    let loopEndPct = 0.9;
+
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    }
+
+    // Resize canvas for high resolution
+    function resizeCanvas() {
+        canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+        canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Marker Dragging Logic
+    function setupMarker(marker, isStart) {
+        let isDragging = false;
+        marker.addEventListener('touchstart', (e) => { isDragging = true; e.preventDefault(); });
+        window.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            let rect = document.getElementById('waveform-container').getBoundingClientRect();
+            let x = e.touches[0].clientX - rect.left;
+            let pct = Math.max(0, Math.min(1, x / rect.width));
             
-            document.getElementById('init-overlay').style.display = 'none';
-            
-            // Unlock audio context with a silent beep
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            gain.gain.value = 0;
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.1);
-
-            if (!isClicking) startMetronome();
-        } catch (err) {
-            alert("Microphone access is required for the looper to work.");
-        }
-    }
-
-    function startMetronome() {
-        isClicking = true;
-        nextBeatTime = audioCtx.currentTime + 0.1;
-        scheduler();
-    }
-
-    function scheduler() {
-        while (nextBeatTime < audioCtx.currentTime + 0.1) {
-            scheduleBeat(currentBeat, nextBeatTime);
-            advanceBeat();
-        }
-        setTimeout(scheduler, 25);
-    }
-
-    function advanceBeat() {
-        const secondsPerBeat = 60.0 / bpm;
-        nextBeatTime += secondsPerBeat;
-        currentBeat = (currentBeat + 1) % 4;
-    }
-
-    function scheduleBeat(beat, time) {
-        const vol = clickVolSlider.value;
-        if (vol > 0) {
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.frequency.value = (beat === 0) ? 1000 : 500;
-            gain.gain.value = vol;
-            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start(time);
-            osc.stop(time + 0.1);
-        }
-
-        setTimeout(() => {
-            beatLed.style.background = (beat === 0) ? '#d73a49' : '#0366d6';
-            setTimeout(() => beatLed.style.background = '#444', 100);
-            handleLogic(beat);
-        }, (time - audioCtx.currentTime) * 1000);
-    }
-
-    function handleLogic(beat) {
-        if (beat === 0) {
-            if (looperState === 'ARMING') {
-                looperState = 'COUNTING';
-                countdownBeats = 4;
-                updateUI();
-            } else if (looperState === 'COUNTING') {
-                countdownBeats -= 4;
-                if (countdownBeats <= 0) {
-                    clickVolSlider.value = 0; 
-                    startRecording();
-                }
-            } else if (looperState === 'RECORDING') {
-                stopRecording();
-            } else if (looperState === 'PLAYING') {
-                playLoop();
+            if (isStart) {
+                loopStartPct = Math.min(pct, loopEndPct - 0.05);
+                marker.style.left = (loopStartPct * 100) + '%';
+            } else {
+                loopEndPct = Math.max(pct, loopStartPct + 0.05);
+                marker.style.left = (loopEndPct * 100) + '%';
             }
-        }
-        
-        if (looperState === 'COUNTING') {
-            subStatus.innerText = "STARTING IN " + (4 - beat);
-        }
+        });
+        window.addEventListener('touchend', () => { isDragging = false; });
     }
 
-    mainBtn.addEventListener('click', () => {
-        if (looperState === 'EMPTY' && !recordedOnce) {
-            looperState = 'ARMING';
-            updateUI();
-        } else if (looperState === 'PLAYING') {
-            if (loopSource) loopSource.stop();
-            looperState = 'STOPPED';
-            updateUI();
-        } else if (looperState === 'STOPPED') {
-            looperState = 'PLAYING';
-            updateUI();
+    setupMarker(startMarker, true);
+    setupMarker(endMarker, false);
+
+    recBtn.addEventListener('click', async () => {
+        initAudio();
+        if (!isRecording) {
+            startRecording();
+        } else {
+            stopRecording();
         }
     });
-
-    document.getElementById('tap-btn').addEventListener('click', () => {
-        const now = performance.now();
-        tapTimes.push(now);
-        if (tapTimes.length > 4) tapTimes.shift();
-        if (tapTimes.length >= 2) {
-            const intervals = [];
-            for (let i = 1; i < tapTimes.length; i++) intervals.push(tapTimes[i] - tapTimes[i-1]);
-            const avg = intervals.reduce((a, b) => a + b) / intervals.length;
-            bpm = Math.round(60000 / avg);
-            if (bpm < 20) bpm = 20;
-            if (bpm > 200) bpm = 200;
-            bpmSlider.value = bpm;
-            bpmVal.innerText = bpm;
-        }
-    });
-
-    bpmSlider.addEventListener('input', (e) => {
-        bpm = parseInt(e.target.value);
-        bpmVal.innerText = bpm;
-    });
-
-    function updateUI() {
-        mainBtn.className = '';
-        subStatus.innerText = "";
-
-        switch(looperState) {
-            case 'EMPTY':
-                mainBtn.classList.add('outline-empty');
-                statusText.innerText = "RECORD";
-                subStatus.innerText = "READY";
-                break;
-            case 'ARMING':
-                mainBtn.classList.add('outline-orange');
-                statusText.innerText = "WAITING";
-                subStatus.innerText = "FOR BEAT 1";
-                break;
-            case 'COUNTING':
-                mainBtn.classList.add('outline-orange');
-                statusText.innerText = "GET READY";
-                break;
-            case 'RECORDING':
-                mainBtn.classList.add('outline-red');
-                statusText.innerText = "RECORDING";
-                subStatus.innerText = "PLAY NOW";
-                break;
-            case 'PLAYING':
-                mainBtn.classList.add('outline-green');
-                statusText.innerText = "PLAYING";
-                subStatus.innerText = "TAP TO PAUSE";
-                break;
-            case 'STOPPED':
-                mainBtn.classList.add('outline-red'); 
-                statusText.innerText = "PAUSED";
-                subStatus.innerText = "TAP TO PLAY";
-                break;
-        }
-    }
 
     async function startRecording() {
-        looperState = 'RECORDING';
-        recordedOnce = true;
-        updateUI();
+        isRecording = true;
+        recBtn.innerText = "STOP";
+        recBtn.classList.add('rec-active');
         audioChunks = [];
+        startTime = Date.now();
         
-        try {
-            currentMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(currentMicStream);
-            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-            mediaRecorder.start();
-        } catch (e) {
-            alert("Could not start microphone for recording.");
+        timerInterval = setInterval(() => {
+            let sec = Math.floor((Date.now() - startTime) / 1000);
+            timerDisplay.innerText = "00:" + sec.toString().padStart(2, '0');
+            if (sec >= 60) stopRecording();
+        }, 100);
+
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recorder = new MediaRecorder(micStream);
+        recorder.ondataavailable = e => audioChunks.push(e.data);
+        recorder.start();
+    }
+
+    async function stopRecording() {
+        isRecording = false;
+        clearInterval(timerInterval);
+        recBtn.innerText = "RECORD";
+        recBtn.classList.remove('rec-active');
+        
+        recorder.stop();
+        micStream.getTracks().forEach(t => t.stop()); // Kill mic immediately
+
+        recorder.onstop = async () => {
+            const blob = new Blob(audioChunks, { type: 'audio/wav' });
+            const arrayBuffer = await blob.arrayBuffer();
+            audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            drawWaveform(audioBuffer);
+        };
+    }
+
+    function drawWaveform(buffer) {
+        const data = buffer.getChannelData(0);
+        const step = Math.ceil(data.length / canvas.width);
+        const amp = canvas.height / 2;
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#0366d6';
+        
+        for (let i = 0; i < canvas.width; i++) {
+            let min = 1.0;
+            let max = -1.0;
+            for (let j = 0; j < step; j++) {
+                const datum = data[(i * step) + j];
+                if (datum < min) min = datum;
+                if (datum > max) max = datum;
+            }
+            ctx.fillRect(i, (1 + min) * amp, 1, Math.max(1, (max - min) * amp));
         }
     }
 
-    function stopRecording() {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
-            
-            mediaRecorder.onstop = async () => {
-                // Instantly kill the microphone track to release iOS audio suppression
-                if (currentMicStream) {
-                    currentMicStream.getTracks().forEach(track => track.stop());
-                }
-
-                try {
-                    const blob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' }); 
-                    const buffer = await blob.arrayBuffer();
-                    loopBuffer = await audioCtx.decodeAudioData(buffer);
-                    looperState = 'PLAYING';
-                    updateUI();
-                    playLoop();
-                } catch (e) {
-                    alert("Audio processing failed. Please hit Reset All and try again.");
-                }
-            };
+    playBtn.addEventListener('click', () => {
+        if (!audioBuffer) return;
+        if (isPlaying) {
+            stopPlayback();
+        } else {
+            startPlayback();
         }
+    });
+
+    function startPlayback() {
+        isPlaying = true;
+        playBtn.innerText = "STOP";
+        playBtn.classList.add('play-active');
+
+        sourceNode = audioCtx.createBufferSource();
+        sourceNode.buffer = audioBuffer;
+        sourceNode.loop = true;
+        
+        const start = audioBuffer.duration * loopStartPct;
+        const end = audioBuffer.duration * loopEndPct;
+        sourceNode.loopStart = start;
+        sourceNode.loopEnd = end;
+
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.value = document.getElementById('vol-slider').value;
+        
+        sourceNode.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        sourceNode.start(0, start);
     }
 
-    function playLoop() {
-        if (!loopBuffer || looperState !== 'PLAYING') return;
-        if (loopSource) loopSource.stop();
-        
-        loopSource = audioCtx.createBufferSource();
-        loopSource.buffer = loopBuffer;
-        const gain = audioCtx.createGain();
-        gain.gain.value = document.getElementById('loop-vol').value;
-        
-        loopSource.connect(gain);
-        gain.connect(audioCtx.destination);
-        loopSource.start(0);
+    function stopPlayback() {
+        isPlaying = false;
+        playBtn.innerText = "PLAY LOOP";
+        playBtn.classList.remove('play-active');
+        if (sourceNode) sourceNode.stop();
     }
+
+    document.getElementById('reset-btn').addEventListener('click', () => {
+        location.reload();
+    });
 </script>
 
 </body>
