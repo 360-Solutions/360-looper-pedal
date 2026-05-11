@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>360 Looper Pedal v0.010</title>
+    <title>360 Looper Pedal v0.011</title>
     <style>
         body {
             background-color: #24292e;
@@ -162,11 +162,23 @@
             gap: 15px;
         }
 
+        .label-container {
+            display: flex;
+            flex-direction: column;
+            width: 75px;
+        }
+
         label {
             font-size: 11px;
             color: #586069;
             text-transform: uppercase;
-            width: 75px;
+            font-weight: bold;
+        }
+        
+        .val-display {
+            font-size: 10px;
+            color: #0366d6;
+            font-weight: bold;
         }
 
         input[type=range] {
@@ -204,7 +216,7 @@
 <body>
 
 <div id="pedal-case">
-    <div class="brand-label">360 LOOPER v0.010</div>
+    <div class="brand-label">360 LOOPER v0.011</div>
     
     <button id="power-btn" class="pedal-btn mic-off">1. INITIALIZE MIC</button>
     
@@ -229,19 +241,29 @@
 
     <div class="slider-group">
         <div class="slider-row">
-            <label>VOL</label>
+            <div class="label-container">
+                <label>VOL</label>
+                <span class="val-display" id="vol-val">100%</span>
+            </div>
             <input type="range" id="vol-slider" min="0" max="3" step="0.1" value="1.0">
         </div>
         <div class="slider-row">
-            <label>PITCH</label>
+            <div class="label-container">
+                <label>PITCH</label>
+                <span class="val-display" id="pitch-val">100%</span>
+            </div>
             <input type="range" id="pitch-slider" min="0.5" max="2.0" step="0.05" value="1.0">
         </div>
         <div class="slider-row">
-            <label>LOW PASS</label>
+            <div class="label-container">
+                <label>LOW PASS</label>
+            </div>
             <input type="range" id="lp-slider" min="100" max="20000" step="100" value="20000">
         </div>
         <div class="slider-row">
-            <label>HIGH PASS</label>
+            <div class="label-container">
+                <label>HIGH PASS</label>
+            </div>
             <input type="range" id="hp-slider" min="20" max="5000" step="50" value="20">
         </div>
     </div>
@@ -251,7 +273,7 @@
 
 <script>
     let audioCtx, micStream, recorder, audioChunks = [], audioBuffer, sourceNode, analyser;
-    let isRecording = false, isPlaying = false, isMicActive = false;
+    let isRecording = false, isPlaying = false, isMicActive = false, hasRecorded = false;
     let startTime, timerInterval, animationId, playheadAnimId;
     let playbackStartTime = 0, bufferOffset = 0;
     
@@ -297,19 +319,48 @@
     window.addEventListener('resize', resize);
     resize();
 
-    document.getElementById('vol-slider').addEventListener('input', updateFilters);
-    document.getElementById('pitch-slider').addEventListener('input', updateFilters);
-    document.getElementById('lp-slider').addEventListener('input', updateFilters);
-    document.getElementById('hp-slider').addEventListener('input', updateFilters);
+    // Double tap detector for sliders
+    function addDoubleTap(el, callback) {
+        let lastTap = 0;
+        el.addEventListener('touchend', (e) => {
+            let currentTime = new Date().getTime();
+            let tapLength = currentTime - lastTap;
+            if (tapLength < 400 && tapLength > 0) {
+                callback(e);
+                e.preventDefault();
+            }
+            lastTap = currentTime;
+        });
+        el.addEventListener('dblclick', callback);
+    }
+
+    const volSlider = document.getElementById('vol-slider');
+    const pitchSlider = document.getElementById('pitch-slider');
+    const lpSlider = document.getElementById('lp-slider');
+    const hpSlider = document.getElementById('hp-slider');
+
+    volSlider.addEventListener('input', updateFilters);
+    pitchSlider.addEventListener('input', updateFilters);
+    lpSlider.addEventListener('input', updateFilters);
+    hpSlider.addEventListener('input', updateFilters);
+
+    addDoubleTap(volSlider, () => { volSlider.value = 1.0; updateFilters(); });
+    addDoubleTap(pitchSlider, () => { pitchSlider.value = 1.0; updateFilters(); });
 
     function updateFilters() {
         if (!audioCtx) return;
-        gainNode.gain.value = document.getElementById('vol-slider').value;
-        lowPassNode.frequency.value = document.getElementById('lp-slider').value;
-        highPassNode.frequency.value = document.getElementById('hp-slider').value;
+        let volVal = volSlider.value;
+        let pitchVal = pitchSlider.value;
+        
+        document.getElementById('vol-val').innerText = Math.round(volVal * 100) + '%';
+        document.getElementById('pitch-val').innerText = Math.round(pitchVal * 100) + '%';
+
+        gainNode.gain.value = volVal;
+        lowPassNode.frequency.value = lpSlider.value;
+        highPassNode.frequency.value = hpSlider.value;
         
         if (sourceNode && isPlaying) {
-            sourceNode.playbackRate.value = document.getElementById('pitch-slider').value;
+            sourceNode.playbackRate.value = pitchVal;
         }
     }
 
@@ -347,18 +398,10 @@
         cancelAnimationFrame(animationId);
         
         if (audioCtx) {
-            let osc = audioCtx.createOscillator();
-            let silentGain = audioCtx.createGain();
-            silentGain.gain.value = 0;
-            osc.connect(silentGain);
-            silentGain.connect(audioCtx.destination);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.1);
-
             await audioCtx.suspend();
             setTimeout(async () => {
                 await audioCtx.resume();
-            }, 100);
+            }, 50);
         }
     }
 
@@ -386,8 +429,11 @@
         const sampleWidth = canvas.width / totalSamplesExpected;
 
         for (let i = 0; i < liveAmplitudes.length; i++) {
-            let h = liveAmplitudes[i] * ampScale;
+            // Added a massive 3x multiplier to visually boost quiet signals
+            let h = liveAmplitudes[i] * ampScale * 3;
+            if (h > canvas.height) h = canvas.height;
             if (h < 2) h = 2; 
+            
             let x = i * sampleWidth;
             let y = (canvas.height - h) / 2;
             ctx.fillRect(x, y, Math.ceil(sampleWidth), h);
@@ -416,6 +462,10 @@
     handleDrag('end-marker', 'end');
 
     recBtn.addEventListener('click', () => {
+        if (hasRecorded) {
+            location.reload();
+            return;
+        }
         if (!isMicActive) {
             alert("Please tap INITIALIZE MIC first.");
             return;
@@ -453,9 +503,16 @@
 
     function stopRec() {
         isRecording = false;
+        hasRecorded = true;
         clearInterval(timerInterval);
-        recBtn.innerText = "REC OVERWRITE";
+        
+        recBtn.innerText = "RESET TO RECORD";
         recBtn.classList.remove('rec-active');
+        recBtn.style.background = "#24292e";
+        recBtn.style.color = "#ffffff";
+        recBtn.style.borderColor = "#24292e";
+        recBtn.style.boxShadow = "none";
+        
         recorder.stop();
         
         recorder.onstop = async () => {
@@ -481,7 +538,8 @@
                 if (datum < min) min = datum;
                 if (datum > max) max = datum;
             }
-            ctx.fillRect(i, (1 + min) * amp, 1, Math.max(1, (max - min) * amp));
+            // Applying a visual multiplier here as well so the static wave matches the live wave boost
+            ctx.fillRect(i, (1 + (min * 3)) * amp, 1, Math.max(1, ((max - min) * 3) * amp));
         }
     }
 
@@ -502,7 +560,7 @@
         sourceNode.loop = true;
         sourceNode.loopStart = loopStart;
         sourceNode.loopEnd = loopEnd;
-        sourceNode.playbackRate.value = document.getElementById('pitch-slider').value;
+        sourceNode.playbackRate.value = pitchSlider.value;
 
         sourceNode.connect(highPassNode);
         
@@ -526,7 +584,7 @@
     function updatePlayhead() {
         if (!isPlaying || !audioBuffer) return;
         
-        let pitchRate = document.getElementById('pitch-slider').value;
+        let pitchRate = pitchSlider.value;
         let playedTime = (audioCtx.currentTime - playbackStartTime) * pitchRate;
         let currentPos = bufferOffset + playedTime;
         
