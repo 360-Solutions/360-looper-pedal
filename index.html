@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>360 Looper Pedal v0.006</title>
+    <title>360 Looper Pedal v0.007</title>
     <style>
         body {
             background-color: #24292e;
@@ -14,10 +14,11 @@
             height: 100vh;
             margin: 0;
             color: #e1e4e8;
+            overflow: hidden;
         }
 
         #pedal-case {
-            width: 340px;
+            width: 350px;
             background-color: #d1d5da;
             border: 3px solid #444;
             border-radius: 30px;
@@ -27,61 +28,71 @@
             flex-direction: column;
             align-items: center;
             gap: 15px;
+            position: relative;
         }
 
         .brand-label {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 200;
             color: #24292e;
             text-transform: uppercase;
-            letter-spacing: 3px;
+            letter-spacing: 2px;
         }
 
-        #waveform-container {
+        #display-screen {
             width: 100%;
-            height: 150px;
-            background: #24292e;
+            height: 160px;
+            background: #1b1f23;
             border: 2px solid #444;
             border-radius: 10px;
             position: relative;
-            overflow: hidden;
             touch-action: none;
         }
 
         canvas {
             width: 100%;
             height: 100%;
+            display: block;
         }
 
         .marker {
             position: absolute;
             top: 0;
             bottom: 0;
-            width: 4px;
-            cursor: ew-resize;
-            z-index: 5;
+            width: 20px; /* Wider invisible hit area for fingers */
+            margin-left: -10px;
+            z-index: 10;
         }
 
-        #start-marker { background: #0366d6; left: 10%; }
-        #end-marker { background: #d73a49; right: 10%; }
+        .marker-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            transform: translateX(-50%);
+        }
+
+        #intro-marker .marker-line { background: #fafbfc; box-shadow: 0 0 5px #fff; }
+        #start-marker .marker-line { background: #0366d6; box-shadow: 0 0 5px #0366d6; }
+        #end-marker .marker-line { background: #d73a49; box-shadow: 0 0 5px #d73a49; }
 
         .controls {
-            display: flex;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 10px;
             width: 100%;
         }
 
         .pedal-btn {
-            flex: 1;
-            padding: 15px;
+            padding: 12px;
             border: 2px solid #24292e;
             background: #ffffff;
-            border-radius: 12px;
-            font-size: 14px;
+            border-radius: 10px;
+            font-size: 12px;
             font-weight: bold;
             color: #24292e;
             cursor: pointer;
-            text-align: center;
             box-shadow: 0 4px 0 #959da5;
         }
 
@@ -90,187 +101,180 @@
             box-shadow: 0 2px 0 #959da5;
         }
 
-        .rec-active {
-            background: #d73a49 !important;
-            color: white !important;
-        }
-
-        .play-active {
-            background: #28a745 !important;
-            color: white !important;
-        }
-
-        .slider-group {
+        #power-btn {
+            background: #ffd33d;
             width: 100%;
-            display: flex;
-            flex-direction: column;
-            background: #fafbfc;
-            padding: 10px;
-            border-radius: 10px;
-            border: 1px solid #959da5;
         }
 
-        label {
-            font-size: 10px;
-            color: #586069;
-            text-transform: uppercase;
-            margin-bottom: 5px;
-        }
+        .rec-active { background: #d73a49 !important; color: white !important; }
+        .play-active { background: #28a745 !important; color: white !important; }
 
         #timer {
             font-family: monospace;
-            font-size: 20px;
+            font-size: 18px;
             color: #24292e;
-            background: #fff;
-            padding: 5px 15px;
-            border-radius: 5px;
-            border: 1px solid #959da5;
         }
+
+        .hidden { display: none; }
     </style>
 </head>
 <body>
 
 <div id="pedal-case">
-    <div class="brand-label">360 LOOPER v0.006</div>
+    <div class="brand-label">360 LOOPER v0.007</div>
+    
+    <button id="power-btn" class="pedal-btn">1. INITIALIZE MICROPHONE</button>
     
     <div id="timer">00:00</div>
 
-    <div id="waveform-container">
+    <div id="display-screen">
         <canvas id="waveform-canvas"></canvas>
-        <div id="start-marker" class="marker"></div>
-        <div id="end-marker" class="marker"></div>
+        <div id="intro-marker" class="marker" style="left: 5%;"><div class="marker-line"></div></div>
+        <div id="start-marker" class="marker" style="left: 30%;"><div class="marker-line"></div></div>
+        <div id="end-marker" class="marker" style="left: 80%;"><div class="marker-line"></div></div>
     </div>
 
     <div class="controls">
         <button id="rec-btn" class="pedal-btn">RECORD</button>
-        <button id="play-btn" class="pedal-btn">PLAY LOOP</button>
+        <button id="play-btn" class="pedal-btn">PLAY</button>
     </div>
 
-    <div class="slider-group">
-        <label>Loop Volume</label>
-        <input type="range" id="vol-slider" min="0" max="1" step="0.1" value="0.8">
-    </div>
-
-    <button id="reset-btn" class="pedal-btn" style="color: #d73a49; font-size: 10px; padding: 5px;">RESET ALL</button>
+    <button id="reset-btn" class="pedal-btn" style="width:100%; color:#d73a49; font-size:10px;">RESET ALL</button>
 </div>
 
 <script>
-    let audioCtx;
-    let micStream;
-    let recorder;
-    let audioChunks = [];
-    let audioBuffer;
-    let sourceNode;
-    let isRecording = false;
-    let isPlaying = false;
-    let startTime;
-    let timerInterval;
-
+    let audioCtx, micStream, recorder, audioChunks = [], audioBuffer, sourceNode, analyser;
+    let isRecording = false, isPlaying = false, startTime, timerInterval, animationId;
+    
     const canvas = document.getElementById('waveform-canvas');
     const ctx = canvas.getContext('2d');
+    const powerBtn = document.getElementById('power-btn');
     const recBtn = document.getElementById('rec-btn');
     const playBtn = document.getElementById('play-btn');
-    const startMarker = document.getElementById('start-marker');
-    const endMarker = document.getElementById('end-marker');
     const timerDisplay = document.getElementById('timer');
 
-    let loopStartPct = 0.1;
-    let loopEndPct = 0.9;
+    let markers = {
+        intro: 0.05,
+        start: 0.30,
+        end: 0.80
+    };
 
-    function initAudio() {
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-    }
-
-    // Resize canvas for high resolution
-    function resizeCanvas() {
+    function resize() {
         canvas.width = canvas.offsetWidth * window.devicePixelRatio;
         canvas.height = canvas.offsetHeight * window.devicePixelRatio;
     }
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
+    window.addEventListener('resize', resize);
+    resize();
 
-    // Marker Dragging Logic
-    function setupMarker(marker, isStart) {
-        let isDragging = false;
-        marker.addEventListener('touchstart', (e) => { isDragging = true; e.preventDefault(); });
-        window.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
-            let rect = document.getElementById('waveform-container').getBoundingClientRect();
-            let x = e.touches[0].clientX - rect.left;
-            let pct = Math.max(0, Math.min(1, x / rect.width));
+    // Initialize Mic Early
+    powerBtn.addEventListener('click', async () => {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        try {
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            powerBtn.innerText = "MIC READY";
+            powerBtn.style.background = "#28a745";
+            powerBtn.style.color = "white";
             
-            if (isStart) {
-                loopStartPct = Math.min(pct, loopEndPct - 0.05);
-                marker.style.left = (loopStartPct * 100) + '%';
-            } else {
-                loopEndPct = Math.max(pct, loopStartPct + 0.05);
-                marker.style.left = (loopEndPct * 100) + '%';
-            }
-        });
-        window.addEventListener('touchend', () => { isDragging = false; });
-    }
-
-    setupMarker(startMarker, true);
-    setupMarker(endMarker, false);
-
-    recBtn.addEventListener('click', async () => {
-        initAudio();
-        if (!isRecording) {
-            startRecording();
-        } else {
-            stopRecording();
+            // Setup Visualizer
+            analyser = audioCtx.createAnalyser();
+            const source = audioCtx.createMediaStreamSource(micStream);
+            source.connect(analyser);
+            drawLive();
+        } catch (e) {
+            alert("Mic access denied.");
         }
     });
 
-    async function startRecording() {
+    function drawLive() {
+        if (!isRecording && !analyser) return;
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        analyser.getByteTimeDomainData(dataArray);
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#28a745';
+        ctx.beginPath();
+        let sliceWidth = canvas.width / bufferLength;
+        let x = 0;
+        for (let i = 0; i < bufferLength; i++) {
+            let v = dataArray[i] / 128.0;
+            let y = v * canvas.height / 2;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+            x += sliceWidth;
+        }
+        ctx.lineTo(canvas.width, canvas.height / 2);
+        ctx.stroke();
+        animationId = requestAnimationFrame(drawLive);
+    }
+
+    // Draggable Logic
+    function handleDrag(id, key) {
+        const el = document.getElementById(id);
+        let active = false;
+        el.addEventListener('touchstart', (e) => { active = true; e.preventDefault(); });
+        window.addEventListener('touchmove', (e) => {
+            if (!active) return;
+            const rect = document.getElementById('display-screen').getBoundingClientRect();
+            const x = e.touches[0].clientX - rect.left;
+            let pct = Math.max(0, Math.min(1, x / rect.width));
+            markers[key] = pct;
+            el.style.left = (pct * 100) + '%';
+        });
+        window.addEventListener('touchend', () => { active = false; });
+    }
+    handleDrag('intro-marker', 'intro');
+    handleDrag('start-marker', 'start');
+    handleDrag('end-marker', 'end');
+
+    recBtn.addEventListener('click', () => {
+        if (!isRecording) startRec();
+        else stopRec();
+    });
+
+    function startRec() {
         isRecording = true;
         recBtn.innerText = "STOP";
         recBtn.classList.add('rec-active');
         audioChunks = [];
         startTime = Date.now();
         
-        timerInterval = setInterval(() => {
-            let sec = Math.floor((Date.now() - startTime) / 1000);
-            timerDisplay.innerText = "00:" + sec.toString().padStart(2, '0');
-            if (sec >= 60) stopRecording();
-        }, 100);
-
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         recorder = new MediaRecorder(micStream);
         recorder.ondataavailable = e => audioChunks.push(e.data);
         recorder.start();
+
+        timerInterval = setInterval(() => {
+            let ms = Date.now() - startTime;
+            let sec = Math.floor(ms / 1000);
+            timerDisplay.innerText = "00:" + sec.toString().padStart(2, '0');
+            if (sec >= 60) stopRec();
+        }, 100);
     }
 
-    async function stopRecording() {
+    function stopRec() {
         isRecording = false;
         clearInterval(timerInterval);
         recBtn.innerText = "RECORD";
         recBtn.classList.remove('rec-active');
-        
         recorder.stop();
-        micStream.getTracks().forEach(t => t.stop()); // Kill mic immediately
-
         recorder.onstop = async () => {
             const blob = new Blob(audioChunks, { type: 'audio/wav' });
-            const arrayBuffer = await blob.arrayBuffer();
-            audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-            drawWaveform(audioBuffer);
+            const arr = await blob.arrayBuffer();
+            audioBuffer = await audioCtx.decodeAudioData(arr);
+            cancelAnimationFrame(animationId);
+            drawStaticWaveform();
         };
     }
 
-    function drawWaveform(buffer) {
-        const data = buffer.getChannelData(0);
+    function drawStaticWaveform() {
+        const data = audioBuffer.getChannelData(0);
         const step = Math.ceil(data.length / canvas.width);
         const amp = canvas.height / 2;
-        
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = '#0366d6';
-        
         for (let i = 0; i < canvas.width; i++) {
-            let min = 1.0;
-            let max = -1.0;
+            let min = 1.0, max = -1.0;
             for (let j = 0; j < step; j++) {
                 const datum = data[(i * step) + j];
                 if (datum < min) min = datum;
@@ -283,45 +287,32 @@
     playBtn.addEventListener('click', () => {
         if (!audioBuffer) return;
         if (isPlaying) {
-            stopPlayback();
+            isPlaying = false;
+            playBtn.innerText = "PLAY";
+            playBtn.classList.remove('play-active');
+            if (sourceNode) sourceNode.stop();
         } else {
-            startPlayback();
+            isPlaying = true;
+            playBtn.innerText = "STOP";
+            playBtn.classList.add('play-active');
+
+            sourceNode = audioCtx.createBufferSource();
+            sourceNode.buffer = audioBuffer;
+            
+            const introStart = audioBuffer.duration * markers.intro;
+            const loopStart = audioBuffer.duration * markers.start;
+            const loopEnd = audioBuffer.duration * markers.end;
+
+            sourceNode.loop = true;
+            sourceNode.loopStart = loopStart;
+            sourceNode.loopEnd = loopEnd;
+
+            sourceNode.connect(audioCtx.destination);
+            sourceNode.start(0, introStart);
         }
     });
 
-    function startPlayback() {
-        isPlaying = true;
-        playBtn.innerText = "STOP";
-        playBtn.classList.add('play-active');
-
-        sourceNode = audioCtx.createBufferSource();
-        sourceNode.buffer = audioBuffer;
-        sourceNode.loop = true;
-        
-        const start = audioBuffer.duration * loopStartPct;
-        const end = audioBuffer.duration * loopEndPct;
-        sourceNode.loopStart = start;
-        sourceNode.loopEnd = end;
-
-        const gainNode = audioCtx.createGain();
-        gainNode.gain.value = document.getElementById('vol-slider').value;
-        
-        sourceNode.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
-        
-        sourceNode.start(0, start);
-    }
-
-    function stopPlayback() {
-        isPlaying = false;
-        playBtn.innerText = "PLAY LOOP";
-        playBtn.classList.remove('play-active');
-        if (sourceNode) sourceNode.stop();
-    }
-
-    document.getElementById('reset-btn').addEventListener('click', () => {
-        location.reload();
-    });
+    document.getElementById('reset-btn').addEventListener('click', () => location.reload());
 </script>
 
 </body>
