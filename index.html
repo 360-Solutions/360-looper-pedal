@@ -3,223 +3,255 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>360 Looper Pedal v0.001</title>
+    <title>360 Looper Pedal v0.002</title>
     <style>
         body {
-            background-color: #f0f0f0;
+            background-color: #24292e;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             margin: 0;
-            color: #24292e;
+            color: #e1e4e8;
         }
 
-        #pedal-container {
+        #pedal-case {
             width: 320px;
             background-color: #d1d5da;
-            border: 2px solid #24292e;
-            border-radius: 20px;
-            padding: 20px;
-            box-shadow: 0 10px 0 #959da5;
+            border: 3px solid #444;
+            border-radius: 30px;
+            padding: 25px;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.2), 0 15px 0 #959da5;
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 20px;
+            position: relative;
         }
 
-        .header {
-            font-size: 14px;
-            letter-spacing: 2px;
-            color: #586069;
+        .brand-label {
+            font-size: 18px;
+            font-weight: 200;
+            color: #24292e;
             text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 5px;
         }
 
-        .tempo-section {
+        .version-label {
+            font-size: 10px;
+            color: #586069;
+            margin-top: -15px;
+            margin-bottom: 10px;
+        }
+
+        .control-row {
             display: flex;
-            gap: 10px;
+            justify-content: space-between;
             width: 100%;
+            gap: 15px;
         }
 
-        .pedal-btn {
+        .small-pedal-btn {
             flex: 1;
-            padding: 15px;
-            border: 1px solid #24292e;
+            padding: 12px;
+            border: 2px solid #24292e;
             background: #ffffff;
-            border-radius: 8px;
-            font-size: 14px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #24292e;
             cursor: pointer;
-            transition: all 0.1s;
             text-align: center;
         }
 
-        .pedal-btn:active {
+        .small-pedal-btn:active {
+            background: #e1e4e8;
             transform: translateY(2px);
-            background: #f6f8fa;
         }
 
-        .pulse-light {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #959da5;
-            margin-bottom: 5px;
-            display: inline-block;
-        }
-
-        .slider-group {
+        .slider-box {
             width: 100%;
+            background: #fafbfc;
+            border: 2px solid #24292e;
+            border-radius: 10px;
+            padding: 10px;
+            box-sizing: border-box;
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            align-items: center;
         }
 
-        label {
+        .slider-label {
             font-size: 12px;
             color: #24292e;
+            margin-bottom: 5px;
+            font-weight: bold;
         }
 
-        input[type=range] {
+        #bpm-slider {
             width: 100%;
-            accent-color: #0366d6;
+            margin: 10px 0;
         }
 
-        #main-looper-btn {
-            width: 120px;
-            height: 120px;
+        #main-switch {
+            width: 140px;
+            height: 140px;
             border-radius: 50%;
-            border: 4px solid #24292e;
-            background: #fafbfc;
+            border: 8px solid #959da5; /* Default gray */
+            background: #f6f8fa;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             cursor: pointer;
-            transition: border-color 0.2s;
+            transition: all 0.2s;
+            box-shadow: 0 5px 0 #959da5;
         }
 
-        #main-looper-btn.armed { border-color: #f66a0a; }
-        #main-looper-btn.recording { border-color: #d73a49; }
-        #main-looper-btn.playing { border-color: #28a745; }
+        #main-switch:active {
+            transform: translateY(4px);
+            box-shadow: 0 1px 0 #959da5;
+        }
 
-        .hidden { display: none; }
-        
-        #reset-btn {
-            margin-top: 10px;
-            color: #d73a49;
-            font-size: 12px;
+        #status-text {
+            font-size: 16px;
+            font-weight: bold;
+            color: #24292e;
+        }
+
+        #sub-status {
+            font-size: 10px;
+            color: #586069;
+            margin-top: 5px;
+        }
+
+        .led-light {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #444;
+            margin-bottom: 10px;
+            border: 1px solid #000;
+        }
+
+        /* State Classes */
+        .outline-orange { border-color: #f66a0a !important; }
+        .outline-red { border-color: #d73a49 !important; }
+        .outline-green { border-color: #28a745 !important; }
+        .outline-empty { border-color: #959da5 !important; }
+
+        #init-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(209, 213, 218, 0.95);
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 30px;
+        }
+
+        .power-btn {
+            padding: 20px 40px;
+            background: #d73a49;
+            color: white;
             border: none;
-            background: none;
-            text-decoration: underline;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            box-shadow: 0 4px 0 #8a1d23;
         }
     </style>
 </head>
 <body>
 
-<div id="pedal-container">
-    <div class="header">360 Looper v0.001</div>
+<div id="pedal-case">
+    <div id="init-overlay">
+        <button class="power-btn" onclick="startPedal()">START / RESET</button>
+    </div>
 
-    <div class="tempo-section">
-        <div id="tap-btn" class="pedal-btn">
-            <div id="beat-light" class="pulse-light"></div><br>
-            TAP
+    <div class="brand-label">360 Looper Pedal</div>
+    <div class="version-label">Vibe coded by Jeremiah Keller v0.002</div>
+
+    <div class="led-light" id="beat-led"></div>
+
+    <div class="control-row">
+        <div id="tap-btn" class="small-pedal-btn">TAP TEMPO</div>
+        <div id="stop-btn" class="small-pedal-btn">STOP LOOP</div>
+    </div>
+
+    <div class="slider-box">
+        <div class="slider-label">BPM: <span id="bpm-val">90</span></div>
+        <input type="range" id="bpm-slider" min="20" max="200" value="90">
+    </div>
+
+    <div id="main-switch" class="outline-empty">
+        <div id="status-text">RECORD</div>
+        <div id="sub-status">NO LOOP</div>
+    </div>
+
+    <div class="control-row">
+        <div class="slider-box" style="flex:1">
+            <div class="slider-label">CLICK</div>
+            <input type="range" id="click-vol" min="0" max="1" step="0.1" value="0.5">
         </div>
-        <div id="bpm-display-btn" class="pedal-btn">
-            BPM<br><span id="bpm-value">0</span>
+        <div class="slider-box" style="flex:1">
+            <div class="slider-label">LOOP</div>
+            <input type="range" id="loop-vol" min="0" max="1" step="0.1" value="0.8">
         </div>
     </div>
-
-    <div id="tempo-slider-container" class="slider-group hidden">
-        <label>Fine Tune BPM</label>
-        <input type="range" id="bpm-slider" min="20" max="200" value="120">
-    </div>
-
-    <div class="slider-group">
-        <label>Click Vol</label>
-        <input type="range" id="click-vol" min="0" max="1" step="0.1" value="0.5">
-    </div>
-
-    <div class="slider-group">
-        <label>Loop Vol</label>
-        <input type="range" id="loop-vol" min="0" max="1" step="0.1" value="0.8">
-    </div>
-
-    <div id="main-looper-btn">
-        <div id="looper-status">READY</div>
-    </div>
-
-    <button id="reset-btn">RESET ALL</button>
 </div>
 
 <script>
     let audioCtx;
-    let clickOsc;
-    let bpm = 0;
-    let tapTimes = [];
-    let isPlaying = false;
-    let currentBeat = 0;
+    let bpm = 90;
+    let isClicking = false;
     let nextBeatTime = 0;
+    let currentBeat = 0;
+    let tapTimes = [];
     
-    let looperState = 'IDLE'; // IDLE, ARMED, RECORDING, PLAYING
+    let looperState = 'EMPTY'; // EMPTY, ARMING, COUNTING, RECORDING, PLAYING, STOPPED
+    let countdownBeats = 0;
+    
     let mediaRecorder;
     let audioChunks = [];
     let loopBuffer;
     let loopSource;
 
-    const looperBtn = document.getElementById('main-looper-btn');
-    const looperStatus = document.getElementById('looper-status');
-    const beatLight = document.getElementById('beat-light');
-    const bpmValue = document.getElementById('bpm-value');
+    const mainBtn = document.getElementById('main-switch');
+    const statusText = document.getElementById('status-text');
+    const subStatus = document.getElementById('sub-status');
+    const beatLed = document.getElementById('beat-led');
     const bpmSlider = document.getElementById('bpm-slider');
-    const bpmDisplayBtn = document.getElementById('bpm-display-btn');
-    const clickVol = document.getElementById('click-vol');
-    const loopVol = document.getElementById('loop-vol');
+    const bpmVal = document.getElementById('bpm-val');
 
-    function initAudio() {
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    async function startPedal() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+        
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
+            });
+            stream.getTracks().forEach(track => track.stop()); // Just to trigger permission
+            document.getElementById('init-overlay').style.display = 'none';
+            resetAll();
+        } catch (err) {
+            alert("Microphone access is required for the looper to work.");
         }
     }
 
-    // Tap Tempo Logic
-    document.getElementById('tap-btn').addEventListener('click', () => {
-        initAudio();
-        const now = performance.now();
-        tapTimes.push(now);
-        if (tapTimes.length > 4) tapTimes.shift();
-
-        if (tapTimes.length >= 2) {
-            const intervals = [];
-            for (let i = 1; i < tapTimes.length; i++) {
-                intervals.push(tapTimes[i] - tapTimes[i-1]);
-            }
-            const avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
-            bpm = Math.round(60000 / avgInterval);
-            updateBPM(bpm);
-        }
-
-        if (!isPlaying && tapTimes.length >= 4) {
-            startMetronome();
-        }
-    });
-
-    function updateBPM(newBpm) {
-        bpm = Math.min(Math.max(newBpm, 20), 200);
-        bpmValue.innerText = bpm;
-        bpmSlider.value = bpm;
+    function resetAll() {
+        if (loopSource) loopSource.stop();
+        looperState = 'EMPTY';
+        updateUI();
+        if (!isClicking) startMetronome();
     }
-
-    bpmDisplayBtn.addEventListener('click', () => {
-        document.getElementById('tempo-slider-container').classList.toggle('hidden');
-    });
-
-    bpmSlider.addEventListener('input', (e) => {
-        updateBPM(e.target.value);
-    });
 
     function startMetronome() {
-        isPlaying = true;
+        isClicking = true;
         nextBeatTime = audioCtx.currentTime;
         scheduler();
     }
@@ -229,7 +261,7 @@
             scheduleBeat(currentBeat, nextBeatTime);
             advanceBeat();
         }
-        if (isPlaying) setTimeout(scheduler, 25);
+        setTimeout(scheduler, 25);
     }
 
     function advanceBeat() {
@@ -239,69 +271,128 @@
     }
 
     function scheduleBeat(beat, time) {
-        // Visuals
-        const duration = (60.0 / bpm) * 1000;
-        setTimeout(() => {
-            beatLight.style.background = (beat === 0) ? '#0366d6' : '#24292e';
-            setTimeout(() => beatLight.style.background = '#959da5', 100);
-            
-            handleStateLogic(beat);
-        }, (time - audioCtx.currentTime) * 1000);
-
         // Sound
-        if (clickVol.value > 0) {
+        const vol = document.getElementById('click-vol').value;
+        if (vol > 0) {
             const osc = audioCtx.createOscillator();
-            const envelope = audioCtx.createGain();
-            osc.frequency.value = (beat === 0) ? 880 : 440;
-            envelope.gain.value = clickVol.value;
-            envelope.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
-            osc.connect(envelope);
-            envelope.connect(audioCtx.destination);
+            const gain = audioCtx.createGain();
+            osc.frequency.value = (beat === 0) ? 1000 : 500;
+            gain.gain.value = vol;
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
             osc.start(time);
             osc.stop(time + 0.1);
         }
+
+        // Visuals and Logic
+        setTimeout(() => {
+            beatLed.style.background = (beat === 0) ? '#d73a49' : '#0366d6';
+            setTimeout(() => beatLed.style.background = '#444', 100);
+            handleLogic(beat);
+        }, (time - audioCtx.currentTime) * 1000);
     }
 
-    function handleStateLogic(beat) {
+    function handleLogic(beat) {
         if (beat === 0) {
-            if (looperState === 'ARMED') {
-                startRecording();
+            if (looperState === 'ARMING') {
+                looperState = 'COUNTING';
+                countdownBeats = 4;
+                updateUI();
+            } else if (looperState === 'COUNTING') {
+                countdownBeats -= 4;
+                if (countdownBeats <= 0) {
+                    startRecording();
+                }
             } else if (looperState === 'RECORDING') {
                 stopRecording();
             } else if (looperState === 'PLAYING') {
                 playLoop();
             }
         }
+        
+        if (looperState === 'COUNTING') {
+            subStatus.innerText = "STARTING IN " + (4 - beat);
+        }
     }
 
-    looperBtn.addEventListener('click', () => {
-        initAudio();
-        if (looperState === 'IDLE') {
-            looperState = 'ARMED';
-            looperStatus.innerText = 'ARMED...';
-            looperBtn.className = 'armed';
-        } else if (looperState === 'PLAYING' || looperState === 'RECORDING') {
-            stopLoopPlayback();
-            looperState = 'IDLE';
-            looperStatus.innerText = 'READY';
-            looperBtn.className = '';
+    mainBtn.addEventListener('click', () => {
+        if (looperState === 'EMPTY' || looperState === 'STOPPED') {
+            looperState = 'ARMING';
+            updateUI();
+        } else if (looperState === 'PLAYING') {
+            // Already playing, hitting it again does nothing or we could toggle
         }
     });
 
+    document.getElementById('stop-btn').addEventListener('click', () => {
+        if (loopSource) loopSource.stop();
+        if (looperState === 'PLAYING') {
+            looperState = 'STOPPED';
+            updateUI();
+        }
+    });
+
+    document.getElementById('tap-btn').addEventListener('click', () => {
+        const now = performance.now();
+        tapTimes.push(now);
+        if (tapTimes.length > 4) tapTimes.shift();
+        if (tapTimes.length >= 2) {
+            const intervals = [];
+            for (let i = 1; i < tapTimes.length; i++) intervals.push(tapTimes[i] - tapTimes[i-1]);
+            const avg = intervals.reduce((a, b) => a + b) / intervals.length;
+            bpm = Math.round(60000 / avg);
+            if (bpm < 20) bpm = 20;
+            if (bpm > 200) bpm = 200;
+            bpmSlider.value = bpm;
+            bpmVal.innerText = bpm;
+        }
+    });
+
+    bpmSlider.addEventListener('input', (e) => {
+        bpm = parseInt(e.target.value);
+        bpmVal.innerText = bpm;
+    });
+
+    function updateUI() {
+        mainBtn.className = '';
+        subStatus.innerText = "";
+
+        switch(looperState) {
+            case 'EMPTY':
+                mainBtn.classList.add('outline-empty');
+                statusText.innerText = "RECORD";
+                subStatus.innerText = "NO LOOP";
+                break;
+            case 'ARMING':
+                mainBtn.classList.add('outline-orange');
+                statusText.innerText = "WAITING...";
+                break;
+            case 'COUNTING':
+                mainBtn.classList.add('outline-orange');
+                statusText.innerText = "GET READY";
+                break;
+            case 'RECORDING':
+                mainBtn.classList.add('outline-red');
+                statusText.innerText = "RECORDING";
+                break;
+            case 'PLAYING':
+                mainBtn.classList.add('outline-green');
+                statusText.innerText = "PLAYING";
+                break;
+            case 'STOPPED':
+                mainBtn.classList.add('outline-red');
+                statusText.innerText = "PLAY";
+                subStatus.innerText = "LOOP SAVED";
+                break;
+        }
+    }
+
     async function startRecording() {
         looperState = 'RECORDING';
-        looperStatus.innerText = 'REC';
-        looperBtn.className = 'recording';
+        updateUI();
         audioChunks = [];
-
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: {
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false
-            } 
-        });
-        
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream);
         mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
         mediaRecorder.start();
@@ -310,12 +401,11 @@
     function stopRecording() {
         mediaRecorder.stop();
         mediaRecorder.onstop = async () => {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-            const arrayBuffer = await audioBlob.arrayBuffer();
-            loopBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            const blob = new Blob(audioChunks, { type: 'audio/wav' });
+            const buffer = await blob.arrayBuffer();
+            loopBuffer = await audioCtx.decodeAudioData(buffer);
             looperState = 'PLAYING';
-            looperStatus.innerText = 'PLAY';
-            looperBtn.className = 'playing';
+            updateUI();
             playLoop();
         };
     }
@@ -323,24 +413,14 @@
     function playLoop() {
         if (!loopBuffer || looperState !== 'PLAYING') return;
         if (loopSource) loopSource.stop();
-        
         loopSource = audioCtx.createBufferSource();
         loopSource.buffer = loopBuffer;
-        const gainNode = audioCtx.createGain();
-        gainNode.gain.value = loopVol.value;
-        loopSource.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
+        const gain = audioCtx.createGain();
+        gain.gain.value = document.getElementById('loop-vol').value;
+        loopSource.connect(gain);
+        gain.connect(audioCtx.destination);
         loopSource.start(0);
     }
-
-    function stopLoopPlayback() {
-        if (loopSource) loopSource.stop();
-        if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
-    }
-
-    document.getElementById('reset-btn').addEventListener('click', () => {
-        location.reload();
-    });
 </script>
 
 </body>
