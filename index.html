@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>360 Looper Pedal v0.011</title>
+    <title>360 Looper Pedal v0.012</title>
     <style>
         body {
             background-color: #24292e;
@@ -216,7 +216,7 @@
 <body>
 
 <div id="pedal-case">
-    <div class="brand-label">360 LOOPER v0.011</div>
+    <div class="brand-label">360 LOOPER v0.012</div>
     
     <button id="power-btn" class="pedal-btn mic-off">1. INITIALIZE MIC</button>
     
@@ -319,7 +319,6 @@
     window.addEventListener('resize', resize);
     resize();
 
-    // Double tap detector for sliders
     function addDoubleTap(el, callback) {
         let lastTap = 0;
         el.addEventListener('touchend', (e) => {
@@ -369,9 +368,10 @@
         if (!isMicActive) {
             try {
                 if (audioCtx.state === 'suspended') await audioCtx.resume();
-                micStream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
-                });
+                
+                // Back to basics: simplest possible microphone request
+                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
                 isMicActive = true;
                 powerBtn.innerText = "MIC ON - TAP TO RELEASE";
                 powerBtn.className = "pedal-btn mic-on";
@@ -383,12 +383,13 @@
                 alert("Mic access denied. Please check Safari settings.");
             }
         } else {
-            releaseMicHard();
+            releaseMicSimple();
         }
     });
 
-    async function releaseMicHard() {
+    function releaseMicSimple() {
         if (micStream) {
+            // Simplest possible track release
             micStream.getTracks().forEach(t => t.stop());
             micStream = null;
         }
@@ -396,13 +397,6 @@
         powerBtn.innerText = "MIC RELEASED - TAP TO RE-ARM";
         powerBtn.className = "pedal-btn mic-off";
         cancelAnimationFrame(animationId);
-        
-        if (audioCtx) {
-            await audioCtx.suspend();
-            setTimeout(async () => {
-                await audioCtx.resume();
-            }, 50);
-        }
     }
 
     function drawLiveWaveform() {
@@ -429,8 +423,8 @@
         const sampleWidth = canvas.width / totalSamplesExpected;
 
         for (let i = 0; i < liveAmplitudes.length; i++) {
-            // Added a massive 3x multiplier to visually boost quiet signals
-            let h = liveAmplitudes[i] * ampScale * 3;
+            // Drawing the raw, actual amplitude
+            let h = liveAmplitudes[i] * ampScale;
             if (h > canvas.height) h = canvas.height;
             if (h < 2) h = 2; 
             
@@ -538,8 +532,8 @@
                 if (datum < min) min = datum;
                 if (datum > max) max = datum;
             }
-            // Applying a visual multiplier here as well so the static wave matches the live wave boost
-            ctx.fillRect(i, (1 + (min * 3)) * amp, 1, Math.max(1, ((max - min) * 3) * amp));
+            // Drawing the raw, actual amplitude
+            ctx.fillRect(i, (1 + min) * amp, 1, Math.max(1, (max - min) * amp));
         }
     }
 
