@@ -176,7 +176,7 @@
     </div>
 
     <div class="brand-label">360 Looper Pedal</div>
-    <div class="version-label">Vibe coded by Jeremiah Keller v0.003</div>
+    <div class="version-label">Vibe coded by Jeremiah Keller v0.004</div>
 
     <div class="led-light" id="beat-led"></div>
 
@@ -223,6 +223,7 @@
     let audioChunks = [];
     let loopBuffer;
     let loopSource;
+    let currentMicStream = null;
 
     const mainBtn = document.getElementById('main-switch');
     const statusText = document.getElementById('status-text');
@@ -237,16 +238,21 @@
         if (audioCtx.state === 'suspended') await audioCtx.resume();
         
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: { 
-                    echoCancellation: { exact: false }, 
-                    noiseSuppression: { exact: false }, 
-                    autoGainControl: { exact: false } 
-                } 
-            });
-            stream.getTracks().forEach(track => track.stop());
+            // Request permission, then immediately turn off the mic to free up iOS audio
+            const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            tempStream.getTracks().forEach(track => track.stop());
+            
             document.getElementById('init-overlay').style.display = 'none';
             
+            // Unlock audio context with a silent beep
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            gain.gain.value = 0;
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+
             if (!isClicking) startMetronome();
         } catch (err) {
             alert("Microphone access is required for the looper to work.");
@@ -395,37 +401,50 @@
         recordedOnce = true;
         updateUI();
         audioChunks = [];
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: { 
-                echoCancellation: { exact: false }, 
-                noiseSuppression: { exact: false }, 
-                autoGainControl: { exact: false } 
-            } 
-        });
-        mediaRecorder = new MediaRecorder(stream);
-        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-        mediaRecorder.start();
+        
+        try {
+            currentMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(currentMicStream);
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.start();
+        } catch (e) {
+            alert("Could not start microphone for recording.");
+        }
     }
 
     function stopRecording() {
-        mediaRecorder.stop();
-        mediaRecorder.onstop = async () => {
-            const blob = new Blob(audioChunks, { type: 'audio/wav' });
-            const buffer = await blob.arrayBuffer();
-            loopBuffer = await audioCtx.decodeAudioData(buffer);
-            looperState = 'PLAYING';
-            updateUI();
-            playLoop();
-        };
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            
+            mediaRecorder.onstop = async () => {
+                // Instantly kill the microphone track to release iOS audio suppression
+                if (currentMicStream) {
+                    currentMicStream.getTracks().forEach(track => track.stop());
+                }
+
+                try {
+                    const blob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' }); 
+                    const buffer = await blob.arrayBuffer();
+                    loopBuffer = await audioCtx.decodeAudioData(buffer);
+                    looperState = 'PLAYING';
+                    updateUI();
+                    playLoop();
+                } catch (e) {
+                    alert("Audio processing failed. Please hit Reset All and try again.");
+                }
+            };
+        }
     }
 
     function playLoop() {
         if (!loopBuffer || looperState !== 'PLAYING') return;
         if (loopSource) loopSource.stop();
+        
         loopSource = audioCtx.createBufferSource();
         loopSource.buffer = loopBuffer;
         const gain = audioCtx.createGain();
         gain.gain.value = document.getElementById('loop-vol').value;
+        
         loopSource.connect(gain);
         gain.connect(audioCtx.destination);
         loopSource.start(0);
