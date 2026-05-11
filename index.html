@@ -3,7 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>360 Looper Pedal v0.012</title>
+    
+    <!-- Cache Busting Meta Tags to ensure Safari always loads the newest GitHub upload -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
+    <title>360 Looper Pedal v0.014</title>
     <style>
         body {
             background-color: #24292e;
@@ -216,7 +222,7 @@
 <body>
 
 <div id="pedal-case">
-    <div class="brand-label">360 LOOPER v0.012</div>
+    <div class="brand-label">360 LOOPER v0.014</div>
     
     <button id="power-btn" class="pedal-btn mic-off">1. INITIALIZE MIC</button>
     
@@ -245,7 +251,14 @@
                 <label>VOL</label>
                 <span class="val-display" id="vol-val">100%</span>
             </div>
-            <input type="range" id="vol-slider" min="0" max="3" step="0.1" value="1.0">
+            <input type="range" id="vol-slider" min="0" max="5" step="0.1" value="1.0">
+        </div>
+        <div class="slider-row">
+            <div class="label-container">
+                <label>GAIN</label>
+                <span class="val-display" id="gain-val">0%</span>
+            </div>
+            <input type="range" id="gain-slider" min="0" max="100" step="1" value="0">
         </div>
         <div class="slider-row">
             <div class="label-container">
@@ -272,14 +285,21 @@
 </div>
 
 <script>
+    /* 
+        ========================================
+        STATE & GLOBAL VARIABLES
+        ========================================
+    */
     let audioCtx, micStream, recorder, audioChunks = [], audioBuffer, sourceNode, analyser;
     let isRecording = false, isPlaying = false, isMicActive = false, hasRecorded = false;
     let startTime, timerInterval, animationId, playheadAnimId;
     let playbackStartTime = 0, bufferOffset = 0;
     
-    let lowPassNode, highPassNode, gainNode;
+    // Web Audio API effect nodes
+    let lowPassNode, highPassNode, gainNode, distortionNode;
     let liveAmplitudes = [];
 
+    // UI Elements
     const canvas = document.getElementById('waveform-canvas');
     const ctx = canvas.getContext('2d');
     const playhead = document.getElementById('playhead');
@@ -287,13 +307,20 @@
     const recBtn = document.getElementById('rec-btn');
     const timerDisplay = document.getElementById('timer');
 
+    // Default marker positions (percentages of total duration)
     let markers = { intro: 0.05, start: 0.30, end: 0.80 };
     const MAX_REC_SECONDS = 60;
 
+    /* 
+        ========================================
+        AUDIO INITIALIZATION & ROUTING
+        ========================================
+    */
     function initAudioContext() {
         if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             
+            // Create and configure filter nodes
             lowPassNode = audioCtx.createBiquadFilter();
             lowPassNode.type = 'lowpass';
             lowPassNode.Q.value = 5; 
@@ -301,17 +328,38 @@
             highPassNode = audioCtx.createBiquadFilter();
             highPassNode.type = 'highpass';
             highPassNode.Q.value = 5; 
+
+            // Create distortion node for the Gain slider
+            distortionNode = audioCtx.createWaveShaper();
+            distortionNode.oversample = '4x';
             
             gainNode = audioCtx.createGain();
             
+            // Route audio: Highpass -> Lowpass -> Distortion -> Gain -> Destination
             highPassNode.connect(lowPassNode);
-            lowPassNode.connect(gainNode);
+            lowPassNode.connect(distortionNode);
+            distortionNode.connect(gainNode);
             gainNode.connect(audioCtx.destination);
             
             updateFilters();
         }
     }
 
+    // Mathematical curve generator for the Gain/Distortion effect
+    function makeDistortionCurve(amount) {
+        if (amount === 0) return null; // Null bypasses the waveshaper perfectly clean
+        let k = amount;
+        let n_samples = 44100;
+        let curve = new Float32Array(n_samples);
+        let deg = Math.PI / 180;
+        for (let i = 0; i < n_samples; ++i) {
+            let x = i * 2 / n_samples - 1;
+            curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
+    }
+
+    // Canvas scaling for high-resolution retina screens
     function resize() {
         canvas.width = canvas.offsetWidth * window.devicePixelRatio;
         canvas.height = canvas.offsetHeight * window.devicePixelRatio;
@@ -319,6 +367,12 @@
     window.addEventListener('resize', resize);
     resize();
 
+    /* 
+        ========================================
+        UI SLIDER CONTROLS
+        ========================================
+    */
+    // Helper to detect double taps on mobile
     function addDoubleTap(el, callback) {
         let lastTap = 0;
         el.addEventListener('touchend', (e) => {
@@ -334,27 +388,36 @@
     }
 
     const volSlider = document.getElementById('vol-slider');
+    const gainSlider = document.getElementById('gain-slider');
     const pitchSlider = document.getElementById('pitch-slider');
     const lpSlider = document.getElementById('lp-slider');
     const hpSlider = document.getElementById('hp-slider');
 
     volSlider.addEventListener('input', updateFilters);
+    gainSlider.addEventListener('input', updateFilters);
     pitchSlider.addEventListener('input', updateFilters);
     lpSlider.addEventListener('input', updateFilters);
     hpSlider.addEventListener('input', updateFilters);
 
+    // Double tap snaps values back to default
     addDoubleTap(volSlider, () => { volSlider.value = 1.0; updateFilters(); });
+    addDoubleTap(gainSlider, () => { gainSlider.value = 0; updateFilters(); });
     addDoubleTap(pitchSlider, () => { pitchSlider.value = 1.0; updateFilters(); });
 
     function updateFilters() {
         if (!audioCtx) return;
         let volVal = volSlider.value;
+        let gainVal = parseInt(gainSlider.value);
         let pitchVal = pitchSlider.value;
         
+        // Update visual text displays
         document.getElementById('vol-val').innerText = Math.round(volVal * 100) + '%';
+        document.getElementById('gain-val').innerText = gainVal + '%';
         document.getElementById('pitch-val').innerText = Math.round(pitchVal * 100) + '%';
 
+        // Apply slider values to Web Audio nodes
         gainNode.gain.value = volVal;
+        distortionNode.curve = makeDistortionCurve(gainVal);
         lowPassNode.frequency.value = lpSlider.value;
         highPassNode.frequency.value = hpSlider.value;
         
@@ -363,13 +426,18 @@
         }
     }
 
+    /* 
+        ========================================
+        MICROPHONE HANDLING
+        ========================================
+    */
     powerBtn.addEventListener('click', async () => {
         initAudioContext();
         if (!isMicActive) {
             try {
                 if (audioCtx.state === 'suspended') await audioCtx.resume();
                 
-                // Back to basics: simplest possible microphone request
+                // Request raw microphone access
                 micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 
                 isMicActive = true;
@@ -389,7 +457,6 @@
 
     function releaseMicSimple() {
         if (micStream) {
-            // Simplest possible track release
             micStream.getTracks().forEach(t => t.stop());
             micStream = null;
         }
@@ -399,6 +466,11 @@
         cancelAnimationFrame(animationId);
     }
 
+    /* 
+        ========================================
+        WAVEFORM VISUALIZATION
+        ========================================
+    */
     function drawLiveWaveform() {
         if (!isRecording || !analyser) return;
         
@@ -423,7 +495,6 @@
         const sampleWidth = canvas.width / totalSamplesExpected;
 
         for (let i = 0; i < liveAmplitudes.length; i++) {
-            // Drawing the raw, actual amplitude
             let h = liveAmplitudes[i] * ampScale;
             if (h > canvas.height) h = canvas.height;
             if (h < 2) h = 2; 
@@ -436,25 +507,82 @@
         animationId = requestAnimationFrame(drawLiveWaveform);
     }
 
+    function drawStaticWaveform() {
+        const data = audioBuffer.getChannelData(0);
+        const step = Math.ceil(data.length / canvas.width);
+        const amp = canvas.height / 2;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#0366d6';
+        
+        for (let i = 0; i < canvas.width; i++) {
+            let min = 1.0, max = -1.0;
+            for (let j = 0; j < step; j++) {
+                const datum = data[(i * step) + j];
+                if (datum < min) min = datum;
+                if (datum > max) max = datum;
+            }
+            ctx.fillRect(i, (1 + min) * amp, 1, Math.max(1, (max - min) * amp));
+        }
+    }
+
+    /* 
+        ========================================
+        MARKER DRAG LOGIC (WITH PLAY-ON-RELEASE)
+        ========================================
+    */
     function handleDrag(id, key) {
         const el = document.getElementById(id);
         let active = false;
-        el.addEventListener('touchstart', (e) => { active = true; e.preventDefault(); });
-        window.addEventListener('touchmove', (e) => {
+        
+        const startDrag = (e) => { 
+            active = true; 
+            e.preventDefault(); 
+        };
+        
+        const doDrag = (e) => {
             if (!active) return;
             const rect = document.getElementById('display-screen').getBoundingClientRect();
-            const x = e.touches[0].clientX - rect.left;
+            // Support both touch and mouse events
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const x = clientX - rect.left;
             let pct = Math.max(0, Math.min(1, x / rect.width));
             markers[key] = pct;
             el.style.left = (pct * 100) + '%';
-        });
-        window.addEventListener('touchend', () => { active = false; });
+        };
+
+        const endDrag = () => { 
+            if (active) {
+                active = false; 
+                // Auto-trigger playback on release if a recording exists
+                if (audioBuffer) {
+                    if (key === 'intro') {
+                        startPlayback('intro');
+                    } else {
+                        startPlayback('start');
+                    }
+                }
+            }
+        };
+
+        el.addEventListener('touchstart', startDrag);
+        el.addEventListener('mousedown', startDrag);
+        
+        window.addEventListener('touchmove', doDrag);
+        window.addEventListener('mousemove', doDrag);
+        
+        window.addEventListener('touchend', endDrag);
+        window.addEventListener('mouseup', endDrag);
     }
     
     handleDrag('intro-marker', 'intro');
     handleDrag('start-marker', 'start');
     handleDrag('end-marker', 'end');
 
+    /* 
+        ========================================
+        RECORDING LOGIC
+        ========================================
+    */
     recBtn.addEventListener('click', () => {
         if (hasRecorded) {
             location.reload();
@@ -518,25 +646,11 @@
         };
     }
 
-    function drawStaticWaveform() {
-        const data = audioBuffer.getChannelData(0);
-        const step = Math.ceil(data.length / canvas.width);
-        const amp = canvas.height / 2;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#0366d6';
-        
-        for (let i = 0; i < canvas.width; i++) {
-            let min = 1.0, max = -1.0;
-            for (let j = 0; j < step; j++) {
-                const datum = data[(i * step) + j];
-                if (datum < min) min = datum;
-                if (datum > max) max = datum;
-            }
-            // Drawing the raw, actual amplitude
-            ctx.fillRect(i, (1 + min) * amp, 1, Math.max(1, (max - min) * amp));
-        }
-    }
-
+    /* 
+        ========================================
+        PLAYBACK & PLAYHEAD LOGIC
+        ========================================
+    */
     function startPlayback(startKey) {
         if (!audioBuffer) return;
         stopPlayback();
@@ -595,6 +709,7 @@
         playheadAnimId = requestAnimationFrame(updatePlayhead);
     }
 
+    // Button event listeners
     document.getElementById('play-intro-btn').addEventListener('click', () => startPlayback('intro'));
     document.getElementById('play-loop-btn').addEventListener('click', () => startPlayback('start'));
     document.getElementById('stop-btn').addEventListener('click', stopPlayback);
