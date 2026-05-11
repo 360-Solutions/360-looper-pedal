@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>360 Looper Pedal v0.008</title>
+    <title>360 Looper Pedal v0.009</title>
     <style>
         body {
             background-color: #24292e;
@@ -11,16 +11,14 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
             color: #e1e4e8;
-            overflow: hidden;
+            padding: 20px 0;
         }
 
         #pedal-case {
             width: 350px;
-            max-height: 95vh;
-            overflow-y: auto;
             background-color: #d1d5da;
             border: 3px solid #444;
             border-radius: 30px;
@@ -62,8 +60,8 @@
             position: absolute;
             top: 0;
             bottom: 0;
-            width: 24px;
-            margin-left: -12px;
+            width: 30px;
+            margin-left: -15px;
             z-index: 10;
         }
 
@@ -107,16 +105,16 @@
         }
 
         .pedal-btn {
-            padding: 12px 8px;
+            padding: 15px 8px;
             border: 2px solid #24292e;
             background: #ffffff;
-            border-radius: 8px;
+            border-radius: 10px;
             font-size: 11px;
-            font-weight: bold;
             color: #24292e;
             cursor: pointer;
             box-shadow: 0 4px 0 #959da5;
             text-align: center;
+            text-transform: uppercase;
         }
 
         .pedal-btn:active {
@@ -134,48 +132,69 @@
             display: flex;
             flex-direction: column;
             background: #fafbfc;
-            padding: 8px;
-            border-radius: 8px;
+            padding: 12px;
+            border-radius: 10px;
             border: 1px solid #959da5;
             box-sizing: border-box;
+            gap: 15px;
         }
 
         .slider-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 10px;
-            margin-bottom: 5px;
+            gap: 15px;
         }
 
         label {
-            font-size: 10px;
+            font-size: 11px;
             color: #586069;
             text-transform: uppercase;
-            width: 60px;
+            width: 75px;
         }
 
         input[type=range] {
             flex: 1;
+            -webkit-appearance: none;
+            width: 100%;
+            height: 20px;
+            background: #e1e4e8;
+            border-radius: 10px;
+            outline: none;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #0366d6;
+            cursor: pointer;
+            border: 2px solid #24292e;
         }
 
         #timer {
             font-family: monospace;
-            font-size: 16px;
+            font-size: 18px;
             color: #24292e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 10px;
         }
     </style>
 </head>
 <body>
 
 <div id="pedal-case">
-    <div class="brand-label">360 LOOPER v0.008</div>
+    <div class="brand-label">360 LOOPER v0.009</div>
     
     <button id="power-btn" class="pedal-btn mic-off">1. INITIALIZE MIC</button>
     
     <div class="controls">
         <button id="rec-btn" class="pedal-btn" style="flex:1;">RECORD</button>
-        <div id="timer" style="padding: 10px;">00:00</div>
+        <div id="timer">00:00</div>
     </div>
 
     <div id="display-screen">
@@ -195,7 +214,11 @@
     <div class="slider-group">
         <div class="slider-row">
             <label>VOL</label>
-            <input type="range" id="vol-slider" min="0" max="2" step="0.1" value="1.0">
+            <input type="range" id="vol-slider" min="0" max="3" step="0.1" value="1.0">
+        </div>
+        <div class="slider-row">
+            <label>PITCH</label>
+            <input type="range" id="pitch-slider" min="0.5" max="2.0" step="0.05" value="1.0">
         </div>
         <div class="slider-row">
             <label>LOW PASS</label>
@@ -207,7 +230,7 @@
         </div>
     </div>
 
-    <button id="reset-btn" class="pedal-btn" style="width:100%; color:#d73a49; font-size:10px;">RESET ALL</button>
+    <button id="reset-btn" class="pedal-btn" style="width:100%; color:#d73a49;">RESET ALL</button>
 </div>
 
 <script>
@@ -217,6 +240,7 @@
     let playbackStartTime = 0, bufferOffset = 0;
     
     let lowPassNode, highPassNode, gainNode;
+    let liveAmplitudes = [];
 
     const canvas = document.getElementById('waveform-canvas');
     const ctx = canvas.getContext('2d');
@@ -226,6 +250,7 @@
     const timerDisplay = document.getElementById('timer');
 
     let markers = { intro: 0.05, start: 0.30, end: 0.80 };
+    const MAX_REC_SECONDS = 60;
 
     function initAudioContext() {
         if (!audioCtx) {
@@ -233,11 +258,15 @@
             
             lowPassNode = audioCtx.createBiquadFilter();
             lowPassNode.type = 'lowpass';
+            lowPassNode.Q.value = 5; 
             
             highPassNode = audioCtx.createBiquadFilter();
             highPassNode.type = 'highpass';
+            highPassNode.Q.value = 5; 
             
             gainNode = audioCtx.createGain();
+            
+            sourceNode = audioCtx.createBufferSource();
             
             highPassNode.connect(lowPassNode);
             lowPassNode.connect(gainNode);
@@ -255,6 +284,7 @@
     resize();
 
     document.getElementById('vol-slider').addEventListener('input', updateFilters);
+    document.getElementById('pitch-slider').addEventListener('input', updateFilters);
     document.getElementById('lp-slider').addEventListener('input', updateFilters);
     document.getElementById('hp-slider').addEventListener('input', updateFilters);
 
@@ -263,13 +293,20 @@
         gainNode.gain.value = document.getElementById('vol-slider').value;
         lowPassNode.frequency.value = document.getElementById('lp-slider').value;
         highPassNode.frequency.value = document.getElementById('hp-slider').value;
+        
+        if (sourceNode && isPlaying) {
+            sourceNode.playbackRate.value = document.getElementById('pitch-slider').value;
+        }
     }
 
     powerBtn.addEventListener('click', async () => {
         initAudioContext();
         if (!isMicActive) {
             try {
-                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                if (audioCtx.state === 'suspended') await audioCtx.resume();
+                micStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
+                });
                 isMicActive = true;
                 powerBtn.innerText = "MIC ON - TAP TO RELEASE";
                 powerBtn.className = "pedal-btn mic-on";
@@ -277,41 +314,64 @@
                 analyser = audioCtx.createAnalyser();
                 const source = audioCtx.createMediaStreamSource(micStream);
                 source.connect(analyser);
-                drawLive();
             } catch (e) {
                 alert("Mic access denied.");
             }
         } else {
-            micStream.getTracks().forEach(t => t.stop());
-            isMicActive = false;
-            powerBtn.innerText = "MIC RELEASED - TAP TO RE-ARM";
-            powerBtn.className = "pedal-btn mic-off";
-            cancelAnimationFrame(animationId);
+            releaseMicHard();
         }
     });
 
-    function drawLive() {
-        if (!isRecording && !analyser) return;
+    async function releaseMicHard() {
+        if (micStream) {
+            micStream.getTracks().forEach(t => t.stop());
+            micStream = null;
+        }
+        isMicActive = false;
+        powerBtn.innerText = "MIC RELEASED - TAP TO RE-ARM";
+        powerBtn.className = "pedal-btn mic-off";
+        cancelAnimationFrame(animationId);
+        
+        if (audioCtx) {
+            await audioCtx.suspend();
+            setTimeout(async () => {
+                await audioCtx.resume();
+            }, 50);
+        }
+    }
+
+    function drawLiveWaveform() {
+        if (!isRecording || !analyser) return;
+        
         const bufferLength = analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
         analyser.getByteTimeDomainData(dataArray);
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = '#28a745';
-        ctx.beginPath();
-        let sliceWidth = canvas.width / bufferLength;
-        let x = 0;
+        let maxAmp = 0;
         for (let i = 0; i < bufferLength; i++) {
-            let v = dataArray[i] / 128.0;
-            let y = v * canvas.height / 2;
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-            x += sliceWidth;
+            let amp = Math.abs(dataArray[i] - 128);
+            if (amp > maxAmp) maxAmp = amp;
         }
-        ctx.lineTo(canvas.width, canvas.height / 2);
-        ctx.stroke();
-        animationId = requestAnimationFrame(drawLive);
+        
+        liveAmplitudes.push(maxAmp);
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#d73a49';
+        
+        const ampScale = canvas.height / 128;
+        const widthPerSecond = canvas.width / MAX_REC_SECONDS;
+        const totalSamplesExpected = MAX_REC_SECONDS * 60; 
+        const sampleWidth = canvas.width / totalSamplesExpected;
+
+        for (let i = 0; i < liveAmplitudes.length; i++) {
+            let h = liveAmplitudes[i] * ampScale;
+            if (h < 2) h = 2; 
+            let x = i * sampleWidth;
+            let y = (canvas.height - h) / 2;
+            ctx.fillRect(x, y, Math.ceil(sampleWidth), h);
+        }
+        
+        animationId = requestAnimationFrame(drawLiveWaveform);
     }
 
     function handleDrag(id, key) {
@@ -328,6 +388,7 @@
         });
         window.addEventListener('touchend', () => { active = false; });
     }
+    
     handleDrag('intro-marker', 'intro');
     handleDrag('start-marker', 'start');
     handleDrag('end-marker', 'end');
@@ -344,6 +405,7 @@
     function startRec() {
         stopPlayback();
         audioBuffer = null;
+        liveAmplitudes = [];
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         playhead.style.display = 'none';
         
@@ -357,11 +419,13 @@
         recorder.ondataavailable = e => audioChunks.push(e.data);
         recorder.start();
 
+        drawLiveWaveform();
+
         timerInterval = setInterval(() => {
             let ms = Date.now() - startTime;
             let sec = Math.floor(ms / 1000);
             timerDisplay.innerText = "00:" + sec.toString().padStart(2, '0');
-            if (sec >= 60) stopRec();
+            if (sec >= MAX_REC_SECONDS) stopRec();
         }, 100);
     }
 
@@ -371,6 +435,7 @@
         recBtn.innerText = "REC OVERWRITE";
         recBtn.classList.remove('rec-active');
         recorder.stop();
+        
         recorder.onstop = async () => {
             const blob = new Blob(audioChunks, { type: 'audio/wav' });
             const arr = await blob.arrayBuffer();
@@ -386,6 +451,7 @@
         const amp = canvas.height / 2;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = '#0366d6';
+        
         for (let i = 0; i < canvas.width; i++) {
             let min = 1.0, max = -1.0;
             for (let j = 0; j < step; j++) {
@@ -414,6 +480,7 @@
         sourceNode.loop = true;
         sourceNode.loopStart = loopStart;
         sourceNode.loopEnd = loopEnd;
+        sourceNode.playbackRate.value = document.getElementById('pitch-slider').value;
 
         sourceNode.connect(highPassNode);
         
@@ -436,7 +503,8 @@
     function updatePlayhead() {
         if (!isPlaying || !audioBuffer) return;
         
-        let playedTime = audioCtx.currentTime - playbackStartTime;
+        let pitchRate = document.getElementById('pitch-slider').value;
+        let playedTime = (audioCtx.currentTime - playbackStartTime) * pitchRate;
         let currentPos = bufferOffset + playedTime;
         
         let loopStartSec = markers.start * audioBuffer.duration;
